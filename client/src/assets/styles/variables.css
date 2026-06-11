@@ -1,0 +1,58 @@
+/**
+ * 目标游戏 — 清爽主题色
+ *
+ * 整体风格：白色/浅蓝底 + 圆角卡片 + 柔和阴影
+ */
+:root {
+  /* 主色调 */
+  --color-primary: #4facfe;
+  --color-primary-dark: #3d8ed5;
+  --color-primary-light: #7fc4fe;
+
+  /* 辅助色 */
+  --color-secondary: #43e97b;
+  --color-accent: #f9a826;
+  --color-danger: #e74c3c;
+  --color-success: #2ecc71;
+
+  /* 背景 */
+  --color-bg: #f0f5fa;
+  --color-bg-dark: #e3ecf5;
+  --color-surface: #ffffff;
+
+  /* 文字 */
+  --color-text: #2c3e50;
+  --color-text-light: #7f8c8d;
+  --color-text-inverse: #ffffff;
+
+  /* 间距 */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-round: 9999px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* 字体 */
+  --font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, sans-serif;
+  --font-size-sm: 12px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 28px;
+
+  /* 过渡 */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s ease;
+}
