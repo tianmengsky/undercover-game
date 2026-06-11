@@ -33,7 +33,7 @@ import type {
 
 type MessageHandler = (payload: unknown) => void
 
-const WS_URL = `http://${window.location.hostname}${window.location.port ? ':' + window.location.port : ''}`
+const WS_URL = `http://${window.location.hostname}:3456`
 
 export function useWebSocket() {
   const socket = ref<Socket | null>(null)

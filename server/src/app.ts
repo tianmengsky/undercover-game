@@ -2,15 +2,12 @@ import Fastify from 'fastify'
 import fastifyCors from '@fastify/cors'
 import fastifyHelmet from '@fastify/helmet'
 import fastifyRateLimit from '@fastify/rate-limit'
-import fastifyStatic from '@fastify/static'
 import { getEnv } from './config/env.js'
 import { authRoutes } from './modules/auth/auth.routes.js'
 import { gameRoutes } from './modules/game/game.routes.js'
 import { roomRoutes } from './modules/game/game.rooms.js'
 import { statsRoutes } from './modules/stats/stats.routes.js'
 import { personaRoutes } from './modules/persona/persona.routes.js'
-import { fileURLToPath } from 'node:url'
-import { existsSync } from 'node:fs'
 
 export async function createApp() {
   const env = getEnv()
@@ -31,13 +28,6 @@ export async function createApp() {
   })
   await app.register(fastifyHelmet)
   await app.register(fastifyRateLimit, { max: 100, timeWindow: '1 minute' })
-
-  // 生产环境下提供前端打包文件
-  const publicDir = fileURLToPath(new URL('../../client/dist', import.meta.url))
-  if (existsSync(publicDir)) {
-    await app.register(fastifyStatic, { root: publicDir, prefix: '/' })
-    app.setNotFoundHandler((_req, reply) => { reply.sendFile('index.html') })
-  }
 
   // 模块路由
   await app.register(authRoutes)

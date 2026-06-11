@@ -18,7 +18,7 @@ const env = getEnv()
 const port = parseInt(process.env.PORT || '3456', 10)
 
 try {
-  await app.listen({ port, host: '0.0.0.0' })
+  await app.listen({ port, host: '127.0.0.1' })
 
   // 在 listen 后创建 socket.io，挂载到 Fastify 底层 HTTP Server
   const io = new Server(app.server, {
