@@ -119,7 +119,7 @@ npm run dev
 │       ├── db/                 # SQLite + Drizzle ORM（连接 / schema / seed）
 │       ├── config/             # 环境配置（Zod 校验）
 │       └── shared/             # 公共工具（错误码 / 响应封装）
-└── dify/                       # Dify 工作流导出配置
+└── dify-workflow/              # Dify 工作流导出文件（.yml）
 ```
 
 ## 演示指南
