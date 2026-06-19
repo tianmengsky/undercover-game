@@ -118,14 +118,10 @@ async function runSpeakingPhase(gameId: string): Promise<void> {
     if (player.type === 'ai') {
       // ── AI 发言（流式） ──
       console.log(`[orchestrator] ${gameId} 发言阶段: AI ${player.customName}(slot=${player.slotIndex}) 开始发言`)
-      // 取全部历史发言（跨轮），让 AI 能参考上下文，保证每次描述都不同
-      const allHistory = (room.speeches || [])
+      // 仅用本轮发言，避免逐轮累积导致 prompt 过长
+      const history = speeches
         .map((s) => `${room.players[s.slotIndex]?.customName ?? '玩家'}：${s.content}`)
         .join('\n')
-      const currentHistory = speeches
-        .map((s) => `${room.players[s.slotIndex]?.customName ?? '玩家'}：${s.content}`)
-        .join('\n')
-      const history = [allHistory, currentHistory].filter(Boolean).join('\n')
 
       broadcast(gameId, 'ai_speech_start', { slotIndex: player.slotIndex })
 
@@ -282,7 +278,7 @@ async function runVotingPhase(gameId: string): Promise<void> {
       // ── AI 投票 ──
       const aliveSlotSet = new Set(alivePlayers.map((p) => p.slotIndex))
       const roundSpeeches = (room.speeches || [])
-        .filter((s) => aliveSlotSet.has(s.slotIndex)) // 过滤已淘汰玩家
+        .filter((s) => s.round === room.currentRound && aliveSlotSet.has(s.slotIndex)) // 仅本轮 + 过滤已淘汰玩家
         .map((s) => ({
           playerName: (s.slotIndex === player.slotIndex
             ? `${room.players[s.slotIndex]?.customName ?? '玩家'}(这是你自己的发言)`

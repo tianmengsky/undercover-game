@@ -13,7 +13,7 @@ export const api = ofetch.create({
   onRequest({ options }) {
     const token = sessionStorage.getItem('accessToken')
     if (token) {
-      ;(options.headers as any)['Authorization'] = `Bearer ${token}`
+      options.headers.set('Authorization', `Bearer ${token}`)
     }
   },
 
