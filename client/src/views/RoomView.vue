@@ -301,7 +301,38 @@ onMounted(async () => {
   initEmptySlots()
   connect(roomId, mySlotIndex.value)
 
-  // 加载人设列表（内置 6 个 + 我创建的 + localStorage 选用）
+  // WS 事件 —— 必须在任何 await 之前注册，否则 room_state 可能丢失
+  on('game_state', (p: any) => {
+    // 重连进入已开始的游戏 → 跳转
+    if (p.status && p.status !== 'waiting') {
+      disconnect()
+      router.push(`/game/${roomId}`)
+    }
+  })
+  on('room_state', (p: any) => {
+    roomInfo.value = { roomCode: p.roomCode || '', roomName: p.roomName || '' }
+    roomName.value = p.roomName || ''
+    if (p.players) buildSlotsFromPlayers(p.players, p.hostUserId || '')
+  })
+  on('room_updated', (p: any) => {
+    roomInfo.value = { roomCode: p.roomCode || '', roomName: p.roomName || '' }
+    roomName.value = p.roomName || ''
+    if (p.players) buildSlotsFromPlayers(p.players, p.hostUserId || '')
+  })
+  on('player_joined', (p: any) => {
+    const idx = slots.value.findIndex((s) => s.slotIndex === p.slotIndex)
+    if (idx >= 0) slots.value[idx] = { ...slots.value[idx], type: 'human', nickname: p.nickname, isMe: false, isHost: false }
+  })
+  on('player_left', (p: any) => {
+    const idx = slots.value.findIndex((s) => s.slotIndex === p.slotIndex)
+    if (idx >= 0) { slots.value[idx] = { slotIndex: p.slotIndex, type: 'empty', isMe: false, isHost: false } }
+  })
+  on('host_changed', (p: any) => { isHost.value = p.newHostId === myUserId.value })
+  on('words_updated', (p: any) => { civilianWord.value = p.civilianWord; undercoverWord.value = p.undercoverWord })
+  on('kicked_from_room', (p: any) => { if (p.slotIndex === mySlotIndex.value) { disconnect(); router.push('/rooms') } })
+  on('game_started', () => { router.push(`/game/${roomId}`) })
+
+  // 加载人设列表（内置 6 个 + 我创建的 + localStorage 选用）—— 放 WS 事件后避免阻塞 room_state
   try {
     const myRes: any = await getMyPersonas()
     if (myRes.code === 0) {
@@ -340,37 +371,6 @@ onMounted(async () => {
     for (const p of personaOptions.value) map[p.id] = p.name
     sessionStorage.setItem('personaNameMap', JSON.stringify(map))
   } catch { /* ignore */ }
-
-  // WS 事件
-  on('game_state', (p: any) => {
-    // 重连进入已开始的游戏 → 跳转
-    if (p.status && p.status !== 'waiting') {
-      disconnect()
-      router.push(`/game/${roomId}`)
-    }
-  })
-  on('room_state', (p: any) => {
-    roomInfo.value = { roomCode: p.roomCode || '', roomName: p.roomName || '' }
-    roomName.value = p.roomName || ''
-    if (p.players) buildSlotsFromPlayers(p.players, p.hostUserId || '')
-  })
-  on('room_updated', (p: any) => {
-    roomInfo.value = { roomCode: p.roomCode || '', roomName: p.roomName || '' }
-    roomName.value = p.roomName || ''
-    if (p.players) buildSlotsFromPlayers(p.players, p.hostUserId || '')
-  })
-  on('player_joined', (p: any) => {
-    const idx = slots.value.findIndex((s) => s.slotIndex === p.slotIndex)
-    if (idx >= 0) slots.value[idx] = { ...slots.value[idx], type: 'human', nickname: p.nickname, isMe: false, isHost: false }
-  })
-  on('player_left', (p: any) => {
-    const idx = slots.value.findIndex((s) => s.slotIndex === p.slotIndex)
-    if (idx >= 0) { slots.value[idx] = { slotIndex: p.slotIndex, type: 'empty', isMe: false, isHost: false } }
-  })
-  on('host_changed', (p: any) => { isHost.value = p.newHostId === myUserId.value })
-  on('words_updated', (p: any) => { civilianWord.value = p.civilianWord; undercoverWord.value = p.undercoverWord })
-  on('kicked_from_room', (p: any) => { if (p.slotIndex === mySlotIndex.value) { disconnect(); router.push('/rooms') } })
-  on('game_started', () => { router.push(`/game/${roomId}`) })
 })
 
 onUnmounted(() => disconnect())

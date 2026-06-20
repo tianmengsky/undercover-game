@@ -83,7 +83,7 @@ export function registerWSHandlers(io: Server): void {
       })
     }
 
-    // 发送当前游戏状态快照
+    // 发送当前游戏状态快照（用于 GameView）
     const player = slotIndex >= 0 ? room.players[slotIndex] : undefined
     socket.emit('game_state', {
       gameId,
@@ -104,7 +104,7 @@ export function registerWSHandlers(io: Server): void {
       speeches: room.speeches || [],
     })
 
-    // 等待阶段额外发送 room_state（含房主和完整玩家类型）
+    // 等待阶段发送 room_state（含房主和完整玩家类型），让 RoomView 初次进入时即可渲染
     if (room.status === 'waiting') {
       socket.emit('room_state', {
         roomCode: room.roomCode,
@@ -150,18 +150,22 @@ export function registerWSHandlers(io: Server): void {
       const r = roomManager.getRoom(gameId)
       if (!r || r.hostUserId !== userId) return
 
-      // 补齐到 6 个槽位（防止 players 数组长度不足）
+      // 拒绝覆盖人类玩家
+      const currentPlayer = r.players[payload.slotIndex]
+      if (currentPlayer?.type === 'human' && payload.persona !== 'empty') return
+
+      // 拷贝当前 players 快照（避免 async await 期间 state 被修改）
+      const snapshot = r.players.map((p) => ({ ...p }))
+
+      // 补齐到 6 个槽位
       const fullPlayers = Array.from({ length: 6 }, (_, i) => {
-        const existing = r.players[i]
+        const existing = snapshot[i]
         if (existing) return existing
-        // 空槽位的占位对象
         return {
           slotIndex: i, customName: '', type: 'empty' as const,
           isAlive: false, isCurrentSpeaker: false, hasSpokenThisRound: false, hasVotedThisRound: false,
         }
       })
-
-      const target = fullPlayers[payload.slotIndex]
 
       if (payload.persona === 'empty') {
         // 移除 AI → 设为空位
@@ -170,10 +174,10 @@ export function registerWSHandlers(io: Server): void {
           isAlive: false, isCurrentSpeaker: false, hasSpokenThisRound: false, hasVotedThisRound: false,
         }
       } else {
-        // 从 DB 查出人设名（官方 + 自定义），硬编码的 6 个 fallback 到前端
+        // 从 DB 查出人设名（官方 + 自定义）
         const persona = await getPersona(payload.persona)
         fullPlayers[payload.slotIndex] = {
-          ...target,
+          ...fullPlayers[payload.slotIndex],
           customName: persona?.name || '',
           aiPersona: payload.persona as any,
           type: 'ai' as const,
