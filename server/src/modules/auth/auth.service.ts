@@ -41,8 +41,8 @@ class AuthService {
     const { username, password, nickname } = input
 
     // 检查用户名是否已存在
-    const existing = db.select().from(users).where(eq(users.username, username)).get()
-    if (existing) {
+    const rows = await db.select().from(users).where(eq(users.username, username))
+    if (rows[0]) {
       throw new AppError(ErrorCodes.USERNAME_TAKEN, '用户名已被注册', 409)
     }
 
@@ -78,7 +78,8 @@ class AuthService {
 
   async login(input: LoginInput) {
     const { username, password } = input
-    const user = db.select().from(users).where(eq(users.username, username)).get()
+    const userRows = await db.select().from(users).where(eq(users.username, username))
+    const user = userRows[0]
     if (!user) {
       throw new AppError(ErrorCodes.WRONG_CREDENTIALS, '用户名或密码错误', 401)
     }

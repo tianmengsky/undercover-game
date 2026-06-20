@@ -465,7 +465,7 @@ async function runEliminationPhase(gameId: string): Promise<string | null> {
         ).length
 
         // 记录词语对（用于 word_master 成就）
-        registerWordPair(room.humanUserId, `${room.civilianWord}/${room.undercoverWord}`)
+        await registerWordPair(room.humanUserId, `${room.civilianWord}/${room.undercoverWord}`)
 
         // 计算 MVP：投票命中卧底次数最多的存活玩家
         let mvpSlot = -1
@@ -479,7 +479,7 @@ async function runEliminationPhase(gameId: string): Promise<string | null> {
         }
         const isMvp = mvpSlot === humanPlayer.slotIndex
 
-        recordGame({
+        await recordGame({
           userId: room.humanUserId,
           nickname: humanPlayer.customName,
           won,
@@ -494,8 +494,8 @@ async function runEliminationPhase(gameId: string): Promise<string | null> {
         // 检测成就
         const eliminatedUndercoverRound = room.eliminatedPlayers.includes(room.undercoverSlotIndex)
           ? room.currentRound : -1
-        const userStats = getUserStats(room.humanUserId)!
-        const newAchievements = checkAchievements(room.humanUserId, {
+        const userStats = await getUserStats(room.humanUserId)!
+        const newAchievements = await checkAchievements(room.humanUserId, {
           gameResult: {
             won,
             role: humanPlayer.role as 'civilian' | 'undercover',
@@ -524,10 +524,10 @@ async function runEliminationPhase(gameId: string): Promise<string | null> {
         // 累加 AI 人设使用次数 + 检测 persona_star
         for (const p of room.players) {
           if (p.type === 'ai' && p.aiPersona && p.aiPersona !== 'default') {
-            incrementPersonaUsage(p.aiPersona)
-            const persona = getPersona(p.aiPersona)
+            await incrementPersonaUsage(p.aiPersona)
+            const persona = await getPersona(p.aiPersona)
             if (persona && persona.authorId !== '_official_' && persona.usageCount >= 10) {
-              const starAch = checkPersonaStar(persona.authorId)
+              const starAch = await checkPersonaStar(persona.authorId)
               if (starAch) {
                 broadcast(gameId, 'achievement_unlocked', { achievements: [starAch] })
               }

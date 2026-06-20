@@ -10,15 +10,15 @@
  *   isAiGenerated   是否 AI 生成
  *   createdAt       创建时间
  */
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+import { mysqlTable, varchar, int, text, boolean, datetime } from 'drizzle-orm/mysql-core'
 import { gameRounds } from './game_rounds'
 
-export const gameSpeeches = sqliteTable('game_speeches', {
-  id: text('id').primaryKey(),
-  roundId: text('round_id').notNull().references(() => gameRounds.id),
-  slotIndex: integer('slot_index').notNull(),
+export const gameSpeeches = mysqlTable('game_speeches', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  roundId: varchar('round_id', { length: 36 }).notNull().references(() => gameRounds.id),
+  slotIndex: int('slot_index').notNull(),
   content: text('content').notNull(),
-  persona: text('persona'),
-  isAiGenerated: integer('is_ai_generated', { mode: 'boolean' }).notNull().default(false),
-  createdAt: text('created_at').notNull(),
+  persona: varchar('persona', { length: 64 }),
+  isAiGenerated: boolean('is_ai_generated').notNull().default(false),
+  createdAt: datetime('created_at').notNull(),
 })

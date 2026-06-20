@@ -10,7 +10,7 @@ import { registerWSHandlers } from './modules/game/game.ws.js'
 loadEnv()
 
 // 初始化种子数据（成就定义 + 官方人设，幂等）
-seedDatabase()
+await seedDatabase()
 
 const app = await createApp()
 const env = getEnv()

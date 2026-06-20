@@ -15,21 +15,21 @@
  *   expGained       获得经验
  *   createdAt       创建时间
  */
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+import { mysqlTable, varchar, int, boolean, datetime } from 'drizzle-orm/mysql-core'
 import { gameRecords } from './game_records'
 import { users } from './users'
 
-export const gamePlayers = sqliteTable('game_players', {
-  id: text('id').primaryKey(),
-  gameId: text('game_id').notNull().references(() => gameRecords.id),
-  userId: text('user_id'),
-  aiPersona: text('ai_persona'),
-  slotIndex: integer('slot_index').notNull(),
-  role: text('role').notNull(), // 'civilian' | 'undercover'
-  isAlive: integer('is_alive', { mode: 'boolean' }).notNull(),
-  isMvp: integer('is_mvp', { mode: 'boolean' }).notNull().default(false),
-  survivalRounds: integer('survival_rounds').notNull().default(0),
-  correctVotes: integer('correct_votes').notNull().default(0),
-  expGained: integer('exp_gained').notNull().default(0),
-  createdAt: text('created_at').notNull(),
+export const gamePlayers = mysqlTable('game_players', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  gameId: varchar('game_id', { length: 36 }).notNull().references(() => gameRecords.id),
+  userId: varchar('user_id', { length: 36 }),
+  aiPersona: varchar('ai_persona', { length: 64 }),
+  slotIndex: int('slot_index').notNull(),
+  role: varchar('role', { length: 32 }).notNull(), // 'civilian' | 'undercover'
+  isAlive: boolean('is_alive').notNull(),
+  isMvp: boolean('is_mvp').notNull().default(false),
+  survivalRounds: int('survival_rounds').notNull().default(0),
+  correctVotes: int('correct_votes').notNull().default(0),
+  expGained: int('exp_gained').notNull().default(0),
+  createdAt: datetime('created_at').notNull(),
 })

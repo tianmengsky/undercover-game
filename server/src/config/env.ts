@@ -3,7 +3,11 @@ import { z } from 'zod'
 const envSchema = z.object({
   PORT: z.coerce.number().default(3456),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  DATABASE_URL: z.string().url().optional().default('placeholder'),
+  DB_HOST: z.string().default('localhost'),
+  DB_PORT: z.coerce.number().default(3306),
+  DB_USER: z.string().default('undercover'),
+  DB_PASSWORD: z.string().default('Undercover123!'),
+  DB_NAME: z.string().default('undercover_game'),
   REDIS_URL: z.string().url().optional().default('placeholder'),
   JWT_SECRET: z.string().min(16),
   JWT_REFRESH_SECRET: z.string().min(16),

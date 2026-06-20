@@ -14,7 +14,7 @@ export async function statsRoutes(app: any): Promise<void> {
     const page = Math.max(1, Number(query.page) || 1)
     const pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 20))
 
-    return success(statsService.getLeaderboard(type, page, pageSize))
+    return success(await statsService.getLeaderboard(type, page, pageSize))
   })
 
   // ═══════════════════════════════════════
@@ -22,7 +22,7 @@ export async function statsRoutes(app: any): Promise<void> {
   // ═══════════════════════════════════════
   app.get('/api/stats/user/:id', async (req) => {
     const { id } = req.params as { id: string }
-    const stats = statsService.getUserStats(id)
+    const stats = await statsService.getUserStats(id)
     if (!stats) {
       return error(ErrorCodes.NOT_FOUND, '用户无统计数据')
     }
@@ -38,7 +38,7 @@ export async function statsRoutes(app: any): Promise<void> {
     const page = Math.max(1, Number(query.page) || 1)
     const pageSize = Math.min(50, Math.max(1, Number(query.pageSize) || 10))
 
-    return success(statsService.getUserHistory(id, page, pageSize))
+    return success(await statsService.getUserHistory(id, page, pageSize))
   })
 
   // ═══════════════════════════════════════
@@ -53,7 +53,7 @@ export async function statsRoutes(app: any): Promise<void> {
   // ═══════════════════════════════════════
   app.get('/api/users/:id/achievements', async (req) => {
     const { id } = req.params as { id: string }
-    return success({ achievements: statsService.getUserAchievements(id) })
+    return success({ achievements: await statsService.getUserAchievements(id) })
   })
 
   // ═══════════════════════════════════════

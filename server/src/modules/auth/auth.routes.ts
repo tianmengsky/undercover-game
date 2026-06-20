@@ -65,7 +65,8 @@ export async function authRoutes(app: any): Promise<void> {
 
   app.get('/api/auth/me', { preHandler: [authGuard] }, async (req) => {
     const userId = (req as any).userId as string
-    const user = db.select().from(users).where(eq(users.id, userId)).get()
+    const rows = await db.select().from(users).where(eq(users.id, userId))
+    const user = rows[0]
     if (!user) {
       return error(ErrorCodes.NOT_FOUND, '用户不存在')
     }

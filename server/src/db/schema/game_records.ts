@@ -12,14 +12,14 @@
  *
  * 关系: 1:N → game_players / game_rounds
  */
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+import { mysqlTable, varchar, int, datetime } from 'drizzle-orm/mysql-core'
 
-export const gameRecords = sqliteTable('game_records', {
-  id: text('id').primaryKey(),
-  civilianWord: text('civilian_word').notNull(),
-  undercoverWord: text('undercover_word').notNull(),
-  winner: text('winner').notNull(), // 'civilian' | 'undercover'
-  totalRounds: integer('total_rounds').notNull(),
-  createdAt: text('created_at').notNull(),
-  finishedAt: text('finished_at').notNull(),
+export const gameRecords = mysqlTable('game_records', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  civilianWord: varchar('civilian_word', { length: 128 }).notNull(),
+  undercoverWord: varchar('undercover_word', { length: 128 }).notNull(),
+  winner: varchar('winner', { length: 32 }).notNull(), // 'civilian' | 'undercover'
+  totalRounds: int('total_rounds').notNull(),
+  createdAt: datetime('created_at').notNull(),
+  finishedAt: datetime('finished_at').notNull(),
 })

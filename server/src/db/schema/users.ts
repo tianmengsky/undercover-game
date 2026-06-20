@@ -17,24 +17,24 @@
  *
  * 关系: 被 game_players.user_id / user_achievements.user_id 引用
  */
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+import { mysqlTable, varchar, int, datetime } from 'drizzle-orm/mysql-core'
 
-export const users = sqliteTable('users', {
-  id: text('id').primaryKey(),
-  username: text('username').notNull().unique(),
-  nickname: text('nickname').notNull(),
-  passwordHash: text('password_hash').notNull(),
-  avatarUrl: text('avatar_url').default(''),
-  level: integer('level').notNull().default(1),
-  exp: integer('exp').notNull().default(0),
-  totalGames: integer('total_games').notNull().default(0),
-  wins: integer('wins').notNull().default(0),
-  mvpCount: integer('mvp_count').notNull().default(0),
-  undercoverWins: integer('undercover_wins').notNull().default(0),
-  survivalCount: integer('survival_count').notNull().default(0),
-  correctVotes: integer('correct_votes').notNull().default(0),
-  usedWordsCount: integer('used_words_count').notNull().default(0),
-  winStreak: integer('win_streak').notNull().default(0),
-  createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at').notNull(),
+export const users = mysqlTable('users', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  username: varchar('username', { length: 255 }).notNull().unique(),
+  nickname: varchar('nickname', { length: 255 }).notNull(),
+  passwordHash: varchar('password_hash', { length: 255 }).notNull(),
+  avatarUrl: varchar('avatar_url', { length: 255 }).default(''),
+  level: int('level').notNull().default(1),
+  exp: int('exp').notNull().default(0),
+  totalGames: int('total_games').notNull().default(0),
+  wins: int('wins').notNull().default(0),
+  mvpCount: int('mvp_count').notNull().default(0),
+  undercoverWins: int('undercover_wins').notNull().default(0),
+  survivalCount: int('survival_count').notNull().default(0),
+  correctVotes: int('correct_votes').notNull().default(0),
+  usedWordsCount: int('used_words_count').notNull().default(0),
+  winStreak: int('win_streak').notNull().default(0),
+  createdAt: datetime('created_at').notNull(),
+  updatedAt: datetime('updated_at').notNull(),
 })

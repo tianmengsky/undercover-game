@@ -11,14 +11,14 @@
  *
  * 关系: 1:N → game_speeches
  */
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+import { mysqlTable, varchar, int, text, datetime } from 'drizzle-orm/mysql-core'
 import { gameRecords } from './game_records'
 
-export const gameRounds = sqliteTable('game_rounds', {
-  id: text('id').primaryKey(),
-  gameId: text('game_id').notNull().references(() => gameRecords.id),
-  roundNumber: integer('round_number').notNull(),
-  phaseOrder: text('phase_order').notNull().default('[]'), // JSON string
-  eliminatedSlot: integer('eliminated_slot'),
-  createdAt: text('created_at').notNull(),
+export const gameRounds = mysqlTable('game_rounds', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  gameId: varchar('game_id', { length: 36 }).notNull().references(() => gameRecords.id),
+  roundNumber: int('round_number').notNull(),
+  phaseOrder: text('phase_order').notNull(), // JSON string
+  eliminatedSlot: int('eliminated_slot'),
+  createdAt: datetime('created_at').notNull(),
 })

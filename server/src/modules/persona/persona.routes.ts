@@ -30,17 +30,17 @@ export async function personaRoutes(app: any): Promise<void> {
       return error(ErrorCodes.NOT_FOUND, '描述太短，请至少写 5 个字')
     }
 
-    const limit = personaService.checkMonthlyLimit(userId)
+    const limit = await personaService.checkMonthlyLimit(userId)
     if (!limit.allowed) {
       return error(ErrorCodes.FORBIDDEN, `每月最多创建 ${limit.max} 个人设，您已用 ${limit.current}/${limit.max}`)
     }
 
     // 从数据库获取昵称
-    const dbUser = db.select().from(users).where(eq(users.id, userId)).get()
-    const authorName = dbUser?.nickname || '匿名玩家'
+    const userRows = await db.select().from(users).where(eq(users.id, userId))
+    const authorName = userRows[0]?.nickname || '匿名玩家'
 
     try {
-      const persona = personaService.createPersona(
+      const persona = await personaService.createPersona(
         userId,
         authorName,
         body.description.trim(),
@@ -65,7 +65,7 @@ export async function personaRoutes(app: any): Promise<void> {
         voicePitch: persona.voicePitch,
         voiceRate: persona.voiceRate,
         voiceVolume: persona.voiceVolume,
-        newAchievement: checkPersonaCreator(userId) || undefined,
+        newAchievement: await checkPersonaCreator(userId) || undefined,
       }, '人设创建成功')
     } catch (e: any) {
       return error(ErrorCodes.INTERNAL, e.message)
@@ -81,7 +81,7 @@ export async function personaRoutes(app: any): Promise<void> {
     const page = Math.max(1, Number(query.page) || 1)
     const pageSize = Math.min(50, Math.max(1, Number(query.pageSize) || 20))
 
-    const result = personaService.getPublicPersonas(sort, page, pageSize)
+    const result = await personaService.getPublicPersonas(sort, page, pageSize)
     return success({
       page,
       pageSize,
@@ -98,7 +98,7 @@ export async function personaRoutes(app: any): Promise<void> {
   // ═══════════════════════════════════════
   app.get('/api/personas/my', { preHandler: authGuard }, async (req) => {
     const userId = (req as any).userId as string
-    const list = personaService.getUserPersonas(userId)
+    const list = await personaService.getUserPersonas(userId)
     return success({
       list: list.map((p) => ({
         id: p.id,
@@ -124,13 +124,13 @@ export async function personaRoutes(app: any): Promise<void> {
     const { id } = req.params as { id: string }
     const userId = (req as any).userId as string
 
-    const persona = personaService.getPersona(id)
+    const persona = await personaService.getPersona(id)
     if (!persona) {
       return error(ErrorCodes.GAME_NOT_FOUND, '人设不存在')
     }
 
     try {
-      const ok = personaService.likePersona(id, userId)
+      const ok = await personaService.likePersona(id, userId)
       return success({
         likeCount: ok ? persona.likeCount + 1 : persona.likeCount,
         liked: ok,
@@ -148,12 +148,12 @@ export async function personaRoutes(app: any): Promise<void> {
     const { id } = req.params as { id: string }
     const userId = (req as any).userId as string
 
-    const persona = personaService.getPersona(id)
+    const persona = await personaService.getPersona(id)
     if (!persona) {
       return error(ErrorCodes.GAME_NOT_FOUND, '人设不存在')
     }
 
-    const ok = personaService.deletePersona(id, userId)
+    const ok = await personaService.deletePersona(id, userId)
     if (!ok) {
       return error(ErrorCodes.FORBIDDEN, '只能删除自己创建的人设')
     }

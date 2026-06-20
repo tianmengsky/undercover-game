@@ -1,7 +1,7 @@
 /**
  * stats.service.ts — 排行榜/统计服务
  *
- * 存储: SQLite（Drizzle ORM + raw SQLite）
+ * 存储: MySQL（Drizzle ORM + raw pool.execute）
  *
  * 计分公式:
  *   score = wins*100 + mvpCount*50 + correctVotes*20
@@ -9,7 +9,7 @@
  */
 import crypto from 'node:crypto'
 import { eq, desc, sql } from 'drizzle-orm'
-import { db, updateUserStats, insertGamePlayer, sqlite as rawDb } from '../../db/index.js'
+import { db, updateUserStats, insertGamePlayer, pool } from '../../db/index.js'
 import { users } from '../../db/schema/users.js'
 import { gameRecords } from '../../db/schema/game_records.js'
 import { gamePlayers } from '../../db/schema/game_players.js'
@@ -70,18 +70,18 @@ export interface AchievementCheckResult {
 // ═══════════════════════════════════
 
 export const ACHIEVEMENTS = [
-  { id: 'first_blood', name: '初出茅庐', description: '完成第一局游戏', icon: '🎯', category: 'battle', rewardExp: 20 },
-  { id: 'sharp_eye', name: '火眼金睛', description: '第一轮就投票淘汰卧底', icon: '👁️', category: 'battle', rewardExp: 50 },
-  { id: 'perfect_vote', name: '百发百中', description: '单局投票 100% 命中卧底', icon: '🎯', category: 'battle', rewardExp: 80 },
-  { id: 'undercover_king', name: '伪装大师', description: '以卧底身份存活到最后获胜', icon: '🎭', category: 'battle', rewardExp: 100 },
-  { id: 'survivor', name: '幸存者', description: '以平民身份存活到最后', icon: '🛡️', category: 'battle', rewardExp: 60 },
-  { id: 'mvp_5', name: '决胜之星', description: '累计获得 5 次 MVP', icon: '⭐', category: 'battle', rewardExp: 150 },
-  { id: 'veteran', name: '沙场老兵', description: '累计完成 50 局游戏', icon: '🏅', category: 'collect', rewardExp: 100 },
-  { id: 'win_streak_3', name: '三连胜', description: '连续 3 局获胜', icon: '🔥', category: 'collect', rewardExp: 200 },
-  { id: 'word_master', name: '词语大师', description: '使用过 20 组以上不同词语对', icon: '📚', category: 'collect', rewardExp: 120 },
-  { id: 'persona_creator', name: '造物主', description: '创建 1 个自定义 AI 人设', icon: '🪄', category: 'social', rewardExp: 50 },
-  { id: 'persona_star', name: '人设之星', description: '创建的人设被其他玩家使用 10 次', icon: '✨', category: 'social', rewardExp: 200 },
-  { id: 'collector', name: '成就猎人', description: '解锁 8 个以上成就', icon: '🏅', category: 'collect', rewardExp: 300 },
+  { id: 'first_blood', name: '初出茅庐', description: '完成第一局游戏', icon: '\u{1F3AF}', category: 'battle', rewardExp: 20 },
+  { id: 'sharp_eye', name: '火眼金睛', description: '第一轮就投票淘汰卧底', icon: '\u{1F441}\uFE0F', category: 'battle', rewardExp: 50 },
+  { id: 'perfect_vote', name: '百发百中', description: '单局投票 100% 命中卧底', icon: '\u{1F3AF}', category: 'battle', rewardExp: 80 },
+  { id: 'undercover_king', name: '伪装大师', description: '以卧底身份存活到最后获胜', icon: '\u{1F3AD}', category: 'battle', rewardExp: 100 },
+  { id: 'survivor', name: '幸存者', description: '以平民身份存活到最后', icon: '\u{1F6E1}\uFE0F', category: 'battle', rewardExp: 60 },
+  { id: 'mvp_5', name: '决胜之星', description: '累计获得 5 次 MVP', icon: '\u2B50', category: 'battle', rewardExp: 150 },
+  { id: 'veteran', name: '沙场老兵', description: '累计完成 50 局游戏', icon: '\u{1F3C5}', category: 'collect', rewardExp: 100 },
+  { id: 'win_streak_3', name: '三连胜', description: '连续 3 局获胜', icon: '\u{1F525}', category: 'collect', rewardExp: 200 },
+  { id: 'word_master', name: '词语大师', description: '使用过 20 组以上不同词语对', icon: '\u{1F4DA}', category: 'collect', rewardExp: 120 },
+  { id: 'persona_creator', name: '造物主', description: '创建 1 个自定义 AI 人设', icon: '\u{1FA84}', category: 'social', rewardExp: 50 },
+  { id: 'persona_star', name: '人设之星', description: '创建的人设被其他玩家使用 10 次', icon: '\u2728', category: 'social', rewardExp: 200 },
+  { id: 'collector', name: '成就猎人', description: '解锁 8 个以上成就', icon: '\u{1F3C5}', category: 'collect', rewardExp: 300 },
 ]
 
 const expMap = new Map(ACHIEVEMENTS.map((a) => [a.id, a.rewardExp]))
@@ -111,14 +111,15 @@ function calcScore(u: { wins: number; mvpCount: number; correctVotes: number; un
 // 记录战绩
 // ═══════════════════════════════════
 
-export function recordGame(result: GameResult): UserStats {
-  const user = db.select({
+export async function recordGame(result: GameResult): Promise<UserStats> {
+  const userRows = await db.select({
     id: users.id, nickname: users.nickname, exp: users.exp,
     totalGames: users.totalGames, wins: users.wins, mvpCount: users.mvpCount,
     undercoverWins: users.undercoverWins, survivalCount: users.survivalCount,
     correctVotes: users.correctVotes, winStreak: users.winStreak,
-  }).from(users).where(eq(users.id, result.userId)).get()
+  }).from(users).where(eq(users.id, result.userId))
 
+  const user = userRows[0]
   if (!user) {
     return { userId: result.userId, nickname: result.nickname, totalGames: 0, wins: 0, mvpCount: 0, totalExp: 0, level: 1, undercoverWins: 0, survivalCount: 0, correctVotes: 0, score: 0 }
   }
@@ -134,7 +135,7 @@ export function recordGame(result: GameResult): UserStats {
   const newLevel = calcLevel(newExp)
   const newWinStreak = result.won ? user.winStreak + 1 : 0
 
-  updateUserStats(result.userId, {
+  await updateUserStats(result.userId, {
     nickname: result.nickname,
     totalGames: newTotalGames, wins: newWins, mvpCount: newMvp,
     undercoverWins: newUndercoverWins, survivalCount: newSurvival,
@@ -145,15 +146,15 @@ export function recordGame(result: GameResult): UserStats {
 
   const gameId = crypto.randomUUID()
   const now = new Date().toISOString()
-  db.insert(gameRecords).values({
+  await db.insert(gameRecords).values({
     id: gameId,
     civilianWord: result.wordPair.split('/')[0],
     undercoverWord: result.wordPair.split('/')[1] || '',
     winner: result.won ? result.role : (result.role === 'civilian' ? 'undercover' : 'civilian'),
     totalRounds: result.totalRounds, createdAt: now, finishedAt: now,
-  }).run()
+  })
 
-  insertGamePlayer({
+  await insertGamePlayer({
     id: crypto.randomUUID(), gameId, userId: result.userId,
     slotIndex: 0, role: result.role,
     isAlive: result.survivedRounds >= result.totalRounds ? 1 : 0,
@@ -174,13 +175,13 @@ export function recordGame(result: GameResult): UserStats {
 // 排行榜
 // ═══════════════════════════════════
 
-export function getLeaderboard(_type: 'total' | 'weekly' | 'monthly', page: number, pageSize: number) {
-  const allUsers = db.select({
+export async function getLeaderboard(_type: 'total' | 'weekly' | 'monthly', page: number, pageSize: number) {
+  const allUsers = await db.select({
     userId: users.id, nickname: users.nickname, level: users.level,
     totalGames: users.totalGames, wins: users.wins, mvpCount: users.mvpCount,
     undercoverWins: users.undercoverWins, survivalCount: users.survivalCount,
     correctVotes: users.correctVotes,
-  }).from(users).all()
+  }).from(users)
 
   const list = allUsers
     .map((u) => ({ ...u, score: calcScore(u), winRate: u.totalGames > 0 ? Math.round((u.wins / u.totalGames) * 100) / 100 : 0 }))
@@ -192,8 +193,9 @@ export function getLeaderboard(_type: 'total' | 'weekly' | 'monthly', page: numb
   return { list: list.slice(start, start + pageSize), total, page, pageSize }
 }
 
-export function getUserStats(userId: string): UserStats | undefined {
-  const u = db.select().from(users).where(eq(users.id, userId)).get()
+export async function getUserStats(userId: string): Promise<UserStats | undefined> {
+  const uRows = await db.select().from(users).where(eq(users.id, userId))
+  const u = uRows[0]
   if (!u) return undefined
   return {
     userId: u.id, nickname: u.nickname, totalGames: u.totalGames,
@@ -203,15 +205,15 @@ export function getUserStats(userId: string): UserStats | undefined {
   }
 }
 
-export function getUserHistory(userId: string, page: number, pageSize: number) {
-  const rows = db.select({
+export async function getUserHistory(userId: string, page: number, pageSize: number) {
+  const rows = await db.select({
     gameId: gamePlayers.gameId, role: gamePlayers.role,
     winner: gameRecords.winner,
-    wordPair: sql<string>`${gameRecords.civilianWord} || '/' || ${gameRecords.undercoverWord}`,
+    wordPair: sql<string>`CONCAT(${gameRecords.civilianWord}, '/', ${gameRecords.undercoverWord})`,
     totalRounds: gameRecords.totalRounds, isMvp: gamePlayers.isMvp,
     expGained: gamePlayers.expGained, finishedAt: gameRecords.finishedAt,
   }).from(gamePlayers).innerJoin(gameRecords, eq(gamePlayers.gameId, gameRecords.id))
-    .where(eq(gamePlayers.userId, userId)).orderBy(desc(gameRecords.finishedAt)).all()
+    .where(eq(gamePlayers.userId, userId)).orderBy(desc(gameRecords.finishedAt))
 
   const total = rows.length
   const start = (page - 1) * pageSize
@@ -229,11 +231,12 @@ export function getUserHistory(userId: string, page: number, pageSize: number) {
 // ═══════════════════════════════════
 
 /** 读用户已解锁的成就 */
-export function getUserAchievements(userId: string): AchievementUnlock[] {
-  const rows = rawDb.prepare(
-    'SELECT ua.achievement_id as id, a.name, a.icon, ua.unlocked_at FROM user_achievements ua JOIN achievements a ON ua.achievement_id = a.id WHERE ua.user_id = ?'
-  ).all(userId) as any[]
-  return rows.map((r) => ({ id: r.id, name: r.name, icon: r.icon, unlockedAt: Number(r.unlocked_at), rewardExp: expMap.get(r.id) || 0 }))
+export async function getUserAchievements(userId: string): Promise<AchievementUnlock[]> {
+  const [rows] = await pool.execute(
+    'SELECT ua.achievement_id as id, a.name, a.icon, ua.unlocked_at FROM user_achievements ua JOIN achievements a ON ua.achievement_id = a.id WHERE ua.user_id = ?',
+    [userId],
+  ) as any
+  return (rows as any[]).map((r) => ({ id: r.id, name: r.name, icon: r.icon, unlockedAt: Number(r.unlocked_at), rewardExp: expMap.get(r.id) || 0 }))
 }
 
 export function getAchievementDefinitions() {
@@ -241,31 +244,31 @@ export function getAchievementDefinitions() {
 }
 
 /** 写入成就解锁 + 加经验，返回成就对象 */
-function writeUnlock(userId: string, achId: string, name: string, icon: string): AchievementUnlock {
+async function writeUnlock(userId: string, achId: string, name: string, icon: string): Promise<AchievementUnlock> {
   const rewardExp = expMap.get(achId) || 0
   const now = Date.now()
-  rawDb.prepare('INSERT OR IGNORE INTO user_achievements (id, user_id, achievement_id, game_id, unlocked_at) VALUES (?, ?, ?, NULL, ?)')
-    .run(crypto.randomUUID(), userId, achId, String(now))
+  await pool.execute('INSERT IGNORE INTO user_achievements (id, user_id, achievement_id, game_id, unlocked_at) VALUES (?, ?, ?, NULL, ?)',
+    [crypto.randomUUID(), userId, achId, String(now)])
   if (rewardExp > 0) {
-    const row = rawDb.prepare('SELECT exp FROM users WHERE id = ?').get(userId) as any
-    const newExp = (row?.exp || 0) + rewardExp
-    updateUserStats(userId, { exp: newExp, level: calcLevel(newExp) })
+    const [rows] = await pool.execute('SELECT exp FROM users WHERE id = ?', [userId]) as any
+    const newExp = ((rows as any[])[0]?.exp || 0) + rewardExp
+    await updateUserStats(userId, { exp: newExp, level: calcLevel(newExp) })
   }
   return { id: achId, name, icon, unlockedAt: now, rewardExp }
 }
 
-export function checkAchievements(
+export async function checkAchievements(
   userId: string,
   input: AchievementCheckResult,
-): AchievementUnlock[] {
+): Promise<AchievementUnlock[]> {
   const { gameResult, userStats } = input
-  const unlockedRows = rawDb.prepare('SELECT achievement_id FROM user_achievements WHERE user_id = ?').all(userId) as any[]
-  const unlockedIds = new Set(unlockedRows.map((r: any) => r.achievement_id))
+  const [unlockedRows] = await pool.execute('SELECT achievement_id FROM user_achievements WHERE user_id = ?', [userId]) as any
+  const unlockedIds = new Set((unlockedRows as any[]).map((r: any) => r.achievement_id))
   const newlyUnlocked: AchievementUnlock[] = []
 
-  function tryUnlock(id: string, name: string, icon: string): boolean {
+  async function tryUnlock(id: string, name: string, icon: string): Promise<boolean> {
     if (unlockedIds.has(id)) return false
-    const u = writeUnlock(userId, id, name, icon)
+    const u = await writeUnlock(userId, id, name, icon)
     unlockedIds.add(id)
     newlyUnlocked.push(u)
     userStats.totalExp += u.rewardExp
@@ -273,38 +276,38 @@ export function checkAchievements(
     return true
   }
 
-  if (userStats.totalGames >= 1) tryUnlock('first_blood', '初出茅庐', '🎯')
-  if (gameResult.eliminatedUndercoverRound === 1) tryUnlock('sharp_eye', '火眼金睛', '👁️')
+  if (userStats.totalGames >= 1) await tryUnlock('first_blood', '\u521D\u51FA\u8305\u5E90', '\u{1F3AF}')
+  if (gameResult.eliminatedUndercoverRound === 1) await tryUnlock('sharp_eye', '\u706B\u773C\u91D1\u775B', '\u{1F441}\uFE0F')
   if (gameResult.totalVotes > 0 && gameResult.correctVotes === gameResult.totalVotes) {
-    tryUnlock('perfect_vote', '百发百中', '🎯')
+    await tryUnlock('perfect_vote', '\u767E\u53D1\u767E\u4E2D', '\u{1F3AF}')
   }
-  if (gameResult.role === 'undercover' && gameResult.won) tryUnlock('undercover_king', '伪装大师', '🎭')
-  if (gameResult.role === 'civilian' && gameResult.survivedRounds >= 5) tryUnlock('survivor', '幸存者', '🛡️')
-  if (userStats.mvpCount >= 5) tryUnlock('mvp_5', '决胜之星', '⭐')
-  if (userStats.totalGames >= 50) tryUnlock('veteran', '沙场老兵', '🏅')
+  if (gameResult.role === 'undercover' && gameResult.won) await tryUnlock('undercover_king', '\u4F2A\u88C5\u5927\u5E08', '\u{1F3AD}')
+  if (gameResult.role === 'civilian' && gameResult.survivedRounds >= 5) await tryUnlock('survivor', '\u5E78\u5B58\u8005', '\u{1F6E1}\uFE0F')
+  if (userStats.mvpCount >= 5) await tryUnlock('mvp_5', '\u51B3\u80DC\u4E4B\u661F', '\u2B50')
+  if (userStats.totalGames >= 50) await tryUnlock('veteran', '\u6C99\u573A\u8001\u5175', '\u{1F3C5}')
 
   if (gameResult.won) {
-    const row = rawDb.prepare('SELECT win_streak FROM users WHERE id = ?').get(userId) as any
-    const streak = (row?.win_streak || 0) + 1
-    if (streak >= 3) tryUnlock('win_streak_3', '三连胜', '🔥')
+    const [rows] = await pool.execute('SELECT win_streak FROM users WHERE id = ?', [userId]) as any
+    const streak = ((rows as any[])[0]?.win_streak || 0) + 1
+    if (streak >= 3) await tryUnlock('win_streak_3', '\u4E09\u8FDE\u80DC', '\u{1F525}')
   }
 
-  if (unlockedRows.length + newlyUnlocked.length >= 8 && !unlockedIds.has('collector')) {
-    tryUnlock('collector', '成就猎人', '🏅')
+  if ((unlockedRows as any[]).length + newlyUnlocked.length >= 8 && !unlockedIds.has('collector')) {
+    await tryUnlock('collector', '\u6210\u5C31\u730E\u4EBA', '\u{1F3C5}')
   }
 
   return newlyUnlocked
 }
 
 /** 记录使用的词语对（用于 word_master 成就） */
-export function registerWordPair(userId: string, wordPair: string): void {
-  const row = rawDb.prepare('SELECT used_words_count FROM users WHERE id = ?').get(userId) as any
-  const count = (row?.used_words_count || 0) + 1
-  updateUserStats(userId, { usedWordsCount: count })
+export async function registerWordPair(userId: string, wordPair: string): Promise<void> {
+  const [rows] = await pool.execute('SELECT used_words_count FROM users WHERE id = ?', [userId]) as any
+  const count = ((rows as any[])[0]?.used_words_count || 0) + 1
+  await updateUserStats(userId, { usedWordsCount: count })
   if (count >= 20) {
-    const existing = rawDb.prepare('SELECT 1 FROM user_achievements WHERE user_id = ? AND achievement_id = ?').get(userId, 'word_master')
-    if (!existing) {
-      writeUnlock(userId, 'word_master', '词语大师', '📚')
+    const [existingRows] = await pool.execute('SELECT 1 FROM user_achievements WHERE user_id = ? AND achievement_id = ?', [userId, 'word_master']) as any
+    if ((existingRows as any[]).length === 0) {
+      await writeUnlock(userId, 'word_master', '\u8BCD\u8BED\u5927\u5E08', '\u{1F4DA}')
     }
   }
 }
@@ -313,25 +316,25 @@ export function registerWordPair(userId: string, wordPair: string): void {
 // 人设相关成就检测
 // ═══════════════════════════════════
 
-export function checkPersonaCreator(userId: string): AchievementUnlock | null {
-  const existing = rawDb.prepare('SELECT 1 FROM user_achievements WHERE user_id = ? AND achievement_id = ?').get(userId, 'persona_creator')
-  if (existing) return null
-  const u = writeUnlock(userId, 'persona_creator', '造物主', '🪄')
-  recheckCollector(userId)
+export async function checkPersonaCreator(userId: string): Promise<AchievementUnlock | null> {
+  const [rows] = await pool.execute('SELECT 1 FROM user_achievements WHERE user_id = ? AND achievement_id = ?', [userId, 'persona_creator']) as any
+  if ((rows as any[]).length > 0) return null
+  const u = await writeUnlock(userId, 'persona_creator', '\u9020\u7269\u4E3B', '\u{1FA84}')
+  await recheckCollector(userId)
   return u
 }
 
-export function checkPersonaStar(authorId: string): AchievementUnlock | null {
-  const existing = rawDb.prepare('SELECT 1 FROM user_achievements WHERE user_id = ? AND achievement_id = ?').get(authorId, 'persona_star')
-  if (existing) return null
-  const u = writeUnlock(authorId, 'persona_star', '人设之星', '✨')
-  recheckCollector(authorId)
+export async function checkPersonaStar(authorId: string): Promise<AchievementUnlock | null> {
+  const [rows] = await pool.execute('SELECT 1 FROM user_achievements WHERE user_id = ? AND achievement_id = ?', [authorId, 'persona_star']) as any
+  if ((rows as any[]).length > 0) return null
+  const u = await writeUnlock(authorId, 'persona_star', '\u4EBA\u8BBE\u4E4B\u661F', '\u2728')
+  await recheckCollector(authorId)
   return u
 }
 
-function recheckCollector(userId: string): void {
-  const row = rawDb.prepare('SELECT count(*) as c FROM user_achievements WHERE user_id = ?').get(userId) as any
-  if (row.c >= 8) {
-    writeUnlock(userId, 'collector', '成就猎人', '🏅')
+async function recheckCollector(userId: string): Promise<void> {
+  const [rows] = await pool.execute('SELECT count(*) as c FROM user_achievements WHERE user_id = ?', [userId]) as any
+  if ((rows as any[])[0].c >= 8) {
+    await writeUnlock(userId, 'collector', '\u6210\u5C31\u730E\u4EBA', '\u{1F3C5}')
   }
 }

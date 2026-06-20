@@ -1,11 +1,11 @@
 /**
  * persona.service.ts — AI 人设工坊服务
  *
- * 存储: SQLite（Drizzle ORM + raw helpers）
+ * 存储: MySQL（Drizzle ORM + raw helpers）
  */
 import crypto from 'node:crypto'
 import { eq, desc } from 'drizzle-orm'
-import { db, sqlite, togglePersonaLike, incrementPersonaUsage, checkPersonaMonthlyLimit, incPersonaMonthlyLimit, decPersonaMonthlyLimit } from '../../db/index.js'
+import { db, pool, togglePersonaLike, incrementPersonaUsage, checkPersonaMonthlyLimit, incPersonaMonthlyLimit, decPersonaMonthlyLimit } from '../../db/index.js'
 import { personas } from '../../db/schema/personas.js'
 
 // ═══════════════════════════════════
@@ -77,7 +77,7 @@ function generateFromDescription(description: string): {
 
 export { checkPersonaMonthlyLimit as checkMonthlyLimit }
 
-export function createPersona(
+export async function createPersona(
   userId: string,
   authorName: string,
   description: string,
@@ -88,7 +88,7 @@ export function createPersona(
   voiceRate?: number,
   voiceVolume?: number,
 ) {
-  const { allowed } = checkPersonaMonthlyLimit(userId)
+  const { allowed } = await checkPersonaMonthlyLimit(userId)
   if (!allowed) throw new Error('每月最多创建 3 个人设')
 
   // 专家模式：用传入的 name/systemPrompt/voice
@@ -105,7 +105,7 @@ export function createPersona(
   const id = crypto.randomUUID()
   const now = Date.now()
 
-  db.insert(personas).values({
+  await db.insert(personas).values({
     id, name: finalName, description,
     systemPrompt: finalPrompt,
     authorId: userId, authorName,
@@ -114,9 +114,9 @@ export function createPersona(
     voicePitch: finalVoicePitch,
     voiceRate: finalVoiceRate,
     voiceVolume: finalVoiceVolume,
-  }).run()
+  })
 
-  incPersonaMonthlyLimit(userId)
+  await incPersonaMonthlyLimit(userId)
 
   return {
     id, name: finalName, description,
@@ -130,32 +130,34 @@ export function createPersona(
   }
 }
 
-export function getPublicPersonas(sort: 'popular' | 'new', page: number, pageSize: number) {
+export async function getPublicPersonas(sort: 'popular' | 'new', page: number, pageSize: number) {
   const orderBy = sort === 'popular' ? desc(personas.usageCount) : desc(personas.createdAt)
-  const all = db.select().from(personas).where(eq(personas.isPublic, true)).orderBy(orderBy).all()
+  const all = await db.select().from(personas).where(eq(personas.isPublic, true)).orderBy(orderBy)
   const total = all.length
   const start = (page - 1) * pageSize
   return { list: all.slice(start, start + pageSize), total }
 }
 
-export function getUserPersonas(userId: string) {
-  return db.select().from(personas).where(eq(personas.authorId, userId)).orderBy(desc(personas.createdAt)).all()
+export async function getUserPersonas(userId: string) {
+  return db.select().from(personas).where(eq(personas.authorId, userId)).orderBy(desc(personas.createdAt))
 }
 
-export function likePersona(personaId: string, userId: string): boolean {
+export async function likePersona(personaId: string, userId: string): Promise<boolean> {
   return togglePersonaLike(personaId, userId)
 }
 
-export function getPersona(personaId: string) {
-  return db.select().from(personas).where(eq(personas.id, personaId)).get()
+export async function getPersona(personaId: string) {
+  const rows = await db.select().from(personas).where(eq(personas.id, personaId))
+  return rows[0]
 }
 
-export function deletePersona(personaId: string, userId: string): boolean {
-  const p = db.select().from(personas).where(eq(personas.id, personaId)).get()
+export async function deletePersona(personaId: string, userId: string): Promise<boolean> {
+  const rows = await db.select().from(personas).where(eq(personas.id, personaId))
+  const p = rows[0]
   if (!p || p.authorId !== userId) return false
-  sqlite.prepare('DELETE FROM persona_likes WHERE persona_id = ?').run(personaId)
-  db.delete(personas).where(eq(personas.id, personaId)).run()
-  decPersonaMonthlyLimit(userId)
+  await pool.execute('DELETE FROM persona_likes WHERE persona_id = ?', [personaId])
+  await db.delete(personas).where(eq(personas.id, personaId))
+  await decPersonaMonthlyLimit(userId)
   return true
 }
 
