@@ -3,7 +3,7 @@
   功能：显示AI角色人设类型的彩色标签
 -->
 <template>
-  <span class="ai-persona-tag" :class="`persona-${persona}`">
+  <span class="ai-persona-tag" :class="tagClass">
     {{ label }}
   </span>
 </template>
@@ -25,7 +25,8 @@ const PERSONA_LABELS: Record<AIPersona, string> = {
   grumpy: '暴躁老哥',
 }
 
-const label = computed(() => PERSONA_LABELS[props.persona] || '默认')
+const label = computed(() => PERSONA_LABELS[props.persona] || '自定义')
+const tagClass = computed(() => PERSONA_LABELS[props.persona] ? `persona-${props.persona}` : 'persona-custom')
 </script>
 
 <style scoped>
@@ -45,4 +46,5 @@ const label = computed(() => PERSONA_LABELS[props.persona] || '默认')
 .persona-newbie { background: #e8f5e9; color: #388e3c; }
 .persona-literary { background: #f3e5f5; color: #7b1fa2; }
 .persona-grumpy { background: #fce4ec; color: #c62828; }
+.persona-custom { background: #e0e7ff; color: #4338ca; }
 </style>

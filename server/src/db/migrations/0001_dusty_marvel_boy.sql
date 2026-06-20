@@ -1,0 +1,1 @@
+ALTER TABLE `personas` MODIFY COLUMN `created_at` bigint unsigned NOT NULL;

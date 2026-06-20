@@ -10,6 +10,7 @@
 import { Server, Socket } from 'socket.io'
 import { roomManager } from './game.manager.js'
 import { authService } from '../auth/auth.service.js'
+import { getPersona } from '../persona/persona.service.js'
 
 export function registerWSHandlers(io: Server): void {
   // 广播完整房间状态
@@ -145,7 +146,7 @@ export function registerWSHandlers(io: Server): void {
     // ── 房间管理事件 ──
 
     // 房主设置 AI 人设 / 移除 AI / 添加 AI
-    socket.on('set_persona', (payload: { slotIndex: number; persona: string }) => {
+    socket.on('set_persona', async (payload: { slotIndex: number; persona: string }) => {
       const r = roomManager.getRoom(gameId)
       if (!r || r.hostUserId !== userId) return
 
@@ -169,9 +170,11 @@ export function registerWSHandlers(io: Server): void {
           isAlive: false, isCurrentSpeaker: false, hasSpokenThisRound: false, hasVotedThisRound: false,
         }
       } else {
-        // 添加/修改 AI（名称由前端根据人设映射显示，服务端不设 customName）
+        // 从 DB 查出人设名（官方 + 自定义），硬编码的 6 个 fallback 到前端
+        const persona = await getPersona(payload.persona)
         fullPlayers[payload.slotIndex] = {
           ...target,
+          customName: persona?.name || '',
           aiPersona: payload.persona as any,
           type: 'ai' as const,
           isAlive: true,

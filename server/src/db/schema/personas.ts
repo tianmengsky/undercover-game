@@ -1,4 +1,4 @@
-import { mysqlTable, varchar, int, boolean, text } from 'drizzle-orm/mysql-core'
+import { mysqlTable, varchar, int, boolean, text, bigint } from 'drizzle-orm/mysql-core'
 
 // 人设表
 export const personas = mysqlTable('personas', {
@@ -11,7 +11,7 @@ export const personas = mysqlTable('personas', {
   usageCount: int('usage_count').notNull().default(0),
   likeCount: int('like_count').notNull().default(0),
   isPublic: boolean('is_public').notNull().default(true),
-  createdAt: int('created_at').notNull(),
+  createdAt: bigint('created_at', { mode: 'number', unsigned: true }).notNull(),
   voiceName: varchar('voice_name', { length: 64 }).default(''),
   voicePitch: int('voice_pitch').notNull().default(100),
   voiceRate: int('voice_rate').notNull().default(100),
