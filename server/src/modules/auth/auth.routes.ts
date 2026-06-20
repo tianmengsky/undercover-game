@@ -92,11 +92,10 @@ export async function authRoutes(app: any): Promise<void> {
       return error(ErrorCodes.INVALID_PARAMS, '缺少 exp')
     }
     const level = Math.floor(body.exp / 100) + 1
-    const ts = new Date().toISOString()
-    db.update(users)
+    const ts = new Date()
+    await db.update(users)
       .set({ level, exp: body.exp, updatedAt: ts } as any)
       .where(eq(users.id, userId))
-      .run()
     return success({ level, exp: body.exp })
   })
 }

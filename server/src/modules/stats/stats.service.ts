@@ -141,12 +141,13 @@ export async function recordGame(result: GameResult): Promise<UserStats> {
     undercoverWins: newUndercoverWins, survivalCount: newSurvival,
     correctVotes: newCorrectVotes, exp: newExp, level: newLevel,
     winStreak: newWinStreak,
-    updatedAt: new Date().toISOString(),
+    updatedAt: new Date(),
   })
 
   const gameId = crypto.randomUUID()
-  const now = new Date().toISOString()
-  await db.insert(gameRecords).values({
+  const now = new Date()
+  // @ts-ignore Drizzle MySQL .values() 重载推断问题
+  await (db.insert(gameRecords) as any).values({
     id: gameId,
     civilianWord: result.wordPair.split('/')[0],
     undercoverWord: result.wordPair.split('/')[1] || '',

@@ -17,15 +17,15 @@ import type { RegisterInput, LoginInput } from './auth.schema.js'
 const env = getEnv()
 
 function signAccessToken(userId: string): string {
-  return jwt.sign({ sub: userId }, env.JWT_SECRET, {
+  return jwt.sign({ sub: userId }, env.JWT_SECRET as string, {
     expiresIn: env.ACCESS_TOKEN_EXPIRY,
-  })
+  } as jwt.SignOptions)
 }
 
 function signRefreshToken(userId: string): string {
-  return jwt.sign({ sub: userId }, env.JWT_REFRESH_SECRET, {
+  return jwt.sign({ sub: userId }, env.JWT_REFRESH_SECRET as string, {
     expiresIn: env.REFRESH_TOKEN_EXPIRY,
-  })
+  } as jwt.SignOptions)
 }
 
 function verifyToken(token: string, secret: string): { sub: string } {
@@ -48,9 +48,9 @@ class AuthService {
 
     const passwordHash = await bcrypt.hash(password, 12)
     const userId = crypto.randomUUID()
-    const now = new Date().toISOString()
+    const now = new Date()
 
-    db.insert(users).values({
+    await (db.insert(users) as any).values({
       id: userId,
       username,
       nickname: nickname || username,
@@ -67,7 +67,7 @@ class AuthService {
       winStreak: 0,
       createdAt: now,
       updatedAt: now,
-    }).run()
+    })
 
     return {
       user: { id: userId, username, nickname: nickname || username, level: 1, exp: 0 },

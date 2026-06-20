@@ -166,7 +166,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { getMyPersonas, getPublicPersonas } from '@/services/personaService'
+import { getMyPersonas } from '@/services/personaService'
 import { startGame, generateWords } from '@/services/gameService'
 
 const route = useRoute()
@@ -301,22 +301,41 @@ onMounted(async () => {
   initEmptySlots()
   connect(roomId, mySlotIndex.value)
 
-  // 加载人设列表（内置 6 个 + API 加载工坊人设）
+  // 加载人设列表（内置 6 个 + 我创建的 + localStorage 选用）
   try {
-    const [publicRes, myRes] = await Promise.all([
-      getPublicPersonas({ pageSize: 50 }),
-      getMyPersonas(),
-    ])
-    const merge = (res: any) => {
-      for (const p of (res.data?.list || [])) {
+    const myRes: any = await getMyPersonas()
+    if (myRes.code === 0) {
+      for (const p of myRes.data?.list || []) {
         if (!personaOptions.value.some((opt) => opt.id === p.id)) {
           personaOptions.value.push({ id: p.id, name: p.name, emoji: '🧩' })
         }
       }
     }
-    if (publicRes.code === 0) merge(publicRes)
-    if (myRes.code === 0) merge(myRes)
-    // 持久化人设名映射（供 game store 使用）
+  } catch { /* ignore */ }
+
+  // 追加 localStorage 中已选用的人设（按 userId 隔离）
+  try {
+    const uid = authStore.user?.id
+    if (uid) {
+      const oldRaw = localStorage.getItem('adoptedPersonas')
+      if (oldRaw && !localStorage.getItem(`adoptedPersonas_${uid}`)) {
+        localStorage.setItem(`adoptedPersonas_${uid}`, oldRaw)
+        localStorage.removeItem('adoptedPersonas')
+      }
+      const raw = localStorage.getItem(`adoptedPersonas_${uid}`)
+      if (raw) {
+        const adopted: Array<{ id: string; name: string; emoji: string }> = JSON.parse(raw)
+        for (const p of adopted) {
+          if (!personaOptions.value.some((opt) => opt.id === p.id)) {
+            personaOptions.value.push(p)
+          }
+        }
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 持久化人设名映射（供 game store 使用）
+  try {
     const map: Record<string, string> = {}
     for (const p of personaOptions.value) map[p.id] = p.name
     sessionStorage.setItem('personaNameMap', JSON.stringify(map))

@@ -41,12 +41,12 @@ export async function updateUserStats(userId: string, updates: Record<string, un
   if (keys.length === 0) return
   const setClause = keys.map((k) => `${camelToSnake(k)} = ?`).join(', ')
   const values = keys.map((k) => updates[k])
-  await pool.execute(`UPDATE users SET ${setClause} WHERE id = ?`, [...values, userId])
+  await (pool.execute as any)(`UPDATE users SET ${setClause} WHERE id = ?`, [...values, userId])
 }
 
 /** 插入游戏玩家记录 */
 export async function insertGamePlayer(data: Record<string, unknown>) {
-  await pool.execute(
+  await (pool.execute as any)(
     `INSERT INTO game_players (id, game_id, user_id, slot_index, role, is_alive, is_mvp, survival_rounds, correct_votes, exp_gained, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [data.id, data.gameId, data.userId, data.slotIndex, data.role, data.isAlive, data.isMvp, data.survivalRounds, data.correctVotes, data.expGained, data.createdAt],
@@ -194,7 +194,7 @@ export async function seedDatabase(): Promise<void> {
   const [persRows] = await pool.execute('SELECT count(*) as c FROM personas') as any
   if (persRows[0].c === 0) {
     for (const p of OFFICIAL_PERSONA_SEED) {
-      await pool.execute(
+      await (pool.execute as any)(
         `INSERT IGNORE INTO personas (id, name, description, system_prompt, author_id, author_name, usage_count, like_count, is_public, created_at, voice_name, voice_pitch, voice_rate, voice_volume) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [p.id, p.name, p.description, p.systemPrompt, p.authorId, p.authorName, p.usageCount, p.likeCount, p.isPublic, p.createdAt, p.voiceName, p.voicePitch, p.voiceRate, p.voiceVolume],
       )

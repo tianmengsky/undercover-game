@@ -327,14 +327,18 @@ async function fetchPublic() {
         _liked: false,
         _adopted: false,
       }))
-      // 标记已选用的人设
+      // 标记已选用的人设（按 userId 隔离）
       try {
-        const raw = localStorage.getItem('adoptedPersonas')
-        if (raw) {
-          const adopted: Array<{ id: string }> = JSON.parse(raw)
-          const ids = new Set(adopted.map((a) => a.id))
-          for (const item of publicList.value) {
-            if (ids.has(item.id)) item._adopted = true
+        const uid = authStore.user?.id
+        if (uid) {
+          migrateAdoptedKey(uid)
+          const raw = localStorage.getItem(`adoptedPersonas_${uid}`)
+          if (raw) {
+            const adopted: Array<{ id: string }> = JSON.parse(raw)
+            const ids = new Set(adopted.map((a) => a.id))
+            for (const item of publicList.value) {
+              if (ids.has(item.id)) item._adopted = true
+            }
           }
         }
       } catch { /* ignore */ }
@@ -374,17 +378,28 @@ async function handleDelete(p: any) {
   }
 }
 
+/** 旧 key 迁移：adoptedPersonas → adoptedPersonas_${userId} */
+function migrateAdoptedKey(uid: string) {
+  const oldRaw = localStorage.getItem('adoptedPersonas')
+  if (oldRaw && !localStorage.getItem(`adoptedPersonas_${uid}`)) {
+    localStorage.setItem(`adoptedPersonas_${uid}`, oldRaw)
+    localStorage.removeItem('adoptedPersonas')
+  }
+}
+
 function handleAdopt(item: any) {
+  const uid = authStore.user?.id
+  if (!uid) return
   try {
-    const raw = localStorage.getItem('adoptedPersonas')
+    migrateAdoptedKey(uid)
+    const key = `adoptedPersonas_${uid}`
+    const raw = localStorage.getItem(key)
     const list: Array<{ id: string; name: string; emoji: string; desc: string }> = raw ? JSON.parse(raw) : []
     if (item._adopted) {
-      // 取消选用
       const filtered = list.filter((p) => p.id !== item.id)
-      localStorage.setItem('adoptedPersonas', JSON.stringify(filtered))
+      localStorage.setItem(key, JSON.stringify(filtered))
       item._adopted = false
     } else {
-      // 选用
       if (!list.some((p) => p.id === item.id)) {
         list.push({
           id: item.id,
@@ -392,7 +407,7 @@ function handleAdopt(item: any) {
           emoji: '🧩',
           desc: item.description.slice(0, 30),
         })
-        localStorage.setItem('adoptedPersonas', JSON.stringify(list))
+        localStorage.setItem(key, JSON.stringify(list))
       }
       item._adopted = true
     }

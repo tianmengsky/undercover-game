@@ -166,7 +166,7 @@ async function runSpeakingPhase(gameId: string): Promise<void> {
       let voice = LEGACY_VOICE[personaId]
       let voiceName = ''
       if (!voice) {
-        const p = getPersona(personaId)
+        const p = await getPersona(personaId)
         voice = p ? { voicePitch: p.voicePitch, voiceRate: p.voiceRate, voiceVolume: p.voiceVolume } : LEGACY_VOICE.default
         voiceName = p?.voiceName || ''
       }

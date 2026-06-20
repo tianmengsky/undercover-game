@@ -9,7 +9,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { createGame } from '@/services/gameService'
-import { getMyPersonas, getPublicPersonas } from '@/services/personaService'
+import { getMyPersonas } from '@/services/personaService'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -61,13 +61,13 @@ function onPersonaChange(slot: SlotConfig, personaId: string) {
   slot.customName = info.name
 }
 
-// ========== 加载官方人设 + 我创建的人设 ==========
+// ========== 加载我创建的 + localStorage 选用的人设 ==========
 onMounted(async () => {
-  // 1. 追加 8 个官方人设 + 自定义人设（不替换已有的 6 个默认选项）
+  // 1. 我创建的自定义人设
   try {
-    const publicRes: any = await getPublicPersonas({ pageSize: 50 })
-    if (publicRes.code === 0) {
-      for (const p of publicRes.data.list) {
+    const res: any = await getMyPersonas()
+    if (res.code === 0 && res.data?.list?.length > 0) {
+      for (const p of res.data.list) {
         if (!personaOptions.value.some((opt) => opt.id === p.id)) {
           personaOptions.value.push({
             id: p.id,
@@ -81,31 +81,23 @@ onMounted(async () => {
   } catch { /* ignore */ }
 
   if (authStore.isAuthenticated) {
-    // 从 localStorage 读取已选用的人设
+    // 2. 从 localStorage 读取已选用的人设（按 userId 隔离）
     try {
-      const raw = localStorage.getItem('adoptedPersonas')
-      if (raw) {
-        const adopted: Array<{ id: string; name: string; emoji: string; desc: string }> = JSON.parse(raw)
-        for (const p of adopted) {
-          if (!personaOptions.value.some((opt) => opt.id === p.id)) {
-            personaOptions.value.push(p)
-          }
+      const uid = authStore.user?.id
+      if (uid) {
+        // 旧 key 迁移一次
+        const oldRaw = localStorage.getItem('adoptedPersonas')
+        if (oldRaw && !localStorage.getItem(`adoptedPersonas_${uid}`)) {
+          localStorage.setItem(`adoptedPersonas_${uid}`, oldRaw)
+          localStorage.removeItem('adoptedPersonas')
         }
-      }
-    } catch { /* ignore */ }
-
-    // 我创建的自定义人设
-    try {
-      const res: any = await getMyPersonas()
-      if (res.code === 0 && res.data?.list?.length > 0) {
-        for (const p of res.data.list) {
-          if (!personaOptions.value.some((opt) => opt.id === p.id)) {
-            personaOptions.value.push({
-              id: p.id,
-              name: p.name,
-              emoji: '🧩',
-              desc: p.description.slice(0, 30),
-            })
+        const raw = localStorage.getItem(`adoptedPersonas_${uid}`)
+        if (raw) {
+          const adopted: Array<{ id: string; name: string; emoji: string; desc: string }> = JSON.parse(raw)
+          for (const p of adopted) {
+            if (!personaOptions.value.some((opt) => opt.id === p.id)) {
+              personaOptions.value.push(p)
+            }
           }
         }
       }

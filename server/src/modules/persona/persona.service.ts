@@ -105,7 +105,8 @@ export async function createPersona(
   const id = crypto.randomUUID()
   const now = Date.now()
 
-  await db.insert(personas).values({
+  // @ts-ignore Drizzle MySQL .values() 重载推断问题
+  await (db.insert(personas) as any).values({
     id, name: finalName, description,
     systemPrompt: finalPrompt,
     authorId: userId, authorName,
