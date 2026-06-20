@@ -83,6 +83,16 @@ export function incPersonaMonthlyLimit(userId: string): void {
   }
 }
 
+/** 月度人设计数-1（删除人设时归还配额） */
+export function decPersonaMonthlyLimit(userId: string): void {
+  const now = new Date()
+  const month = `${now.getFullYear()}-${now.getMonth() + 1}`
+  const row = sqlite.prepare('SELECT count FROM persona_monthly_limits WHERE user_id = ? AND month = ?').get(userId, month) as any
+  if (row && row.count > 0) {
+    sqlite.prepare('UPDATE persona_monthly_limits SET count = count - 1 WHERE user_id = ? AND month = ?').run(userId, month)
+  }
+}
+
 // ═══════════════════════════════════
 // 数据库初始化 Seed
 // ═══════════════════════════════════

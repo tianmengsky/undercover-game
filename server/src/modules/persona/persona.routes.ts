@@ -129,12 +129,16 @@ export async function personaRoutes(app: any): Promise<void> {
       return error(ErrorCodes.GAME_NOT_FOUND, '人设不存在')
     }
 
-    const ok = personaService.likePersona(id, userId)
-    if (!ok) {
-      return success({ likeCount: persona.likeCount, liked: false })
+    try {
+      const ok = personaService.likePersona(id, userId)
+      return success({
+        likeCount: ok ? persona.likeCount + 1 : persona.likeCount,
+        liked: ok,
+      })
+    } catch (err: any) {
+      req.log.error({ personaId: id, userId, err: err.message }, 'likePersona failed')
+      return error(ErrorCodes.INTERNAL, '点赞失败，请稍后重试')
     }
-
-    return success({ likeCount: persona.likeCount, liked: true })
   })
 
   // ═══════════════════════════════════════

@@ -151,9 +151,12 @@
     <button
       v-if="isHost"
       class="btn-start"
-      :disabled="filledCount < 6"
+      :disabled="filledCount < 6 || starting"
       @click="handleStart"
-    >开始游戏</button>
+    >
+      <span v-if="starting" class="spinner"></span>
+      {{ starting ? (startStep === 'generating' ? 'AI 正在生成词语...' : '正在分配角色...') : '开始游戏' }}
+    </button>
     <p v-if="!isHost" class="waiting-text">等待房主开始游戏<span class="dots"></span></p>
   </div>
 </template>
@@ -164,7 +167,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { getMyPersonas, getPublicPersonas } from '@/services/personaService'
-import { startGame } from '@/services/gameService'
+import { startGame, generateWords } from '@/services/gameService'
 
 const route = useRoute()
 const router = useRouter()
@@ -277,11 +280,19 @@ function handleRemoveAI(slotIndex: number) { handleSetPersona(slotIndex, 'empty'
 function handleFillAI(slotIndex: number) { handleSetPersona(slotIndex, 'default') }
 function copyRoomCode() { navigator.clipboard.writeText(roomInfo.value.roomCode) }
 
+const starting = ref(false)
+const startStep = ref('')  // '' | 'generating' | 'assigning'
+
 async function handleStart() {
+  starting.value = true
   try {
+    startStep.value = 'generating'
+    await generateWords(roomId, difficulty.value)
+    startStep.value = 'assigning'
     const res: any = await startGame(roomId, { difficulty: difficulty.value })
     if (res.code === 0) router.push(`/game/${roomId}`)
   } catch { /* GameView 也会调一次 */ }
+  finally { starting.value = false; startStep.value = '' }
 }
 
 function handleLeave() { send('leave_room'); router.push('/rooms') }
@@ -822,6 +833,22 @@ onUnmounted(() => disconnect())
   25% { content: '.'; }
   50% { content: '..'; }
   75% { content: '...'; }
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 600px) {

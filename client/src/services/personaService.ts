@@ -21,9 +21,9 @@ export function getMyPersonas() {
 }
 
 export function likePersona(personaId: string) {
-  return api(`/personas/${personaId}/like`, { method: 'POST' })
+  return api(`/personas/${personaId}/like`, { method: 'POST', body: {} })
 }
 
 export function deletePersona(personaId: string) {
-  return api(`/personas/${personaId}`, { method: 'DELETE' })
+  return api(`/personas/${personaId}`, { method: 'DELETE', body: {} })
 }

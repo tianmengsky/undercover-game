@@ -5,7 +5,7 @@
  */
 import crypto from 'node:crypto'
 import { eq, desc } from 'drizzle-orm'
-import { db, togglePersonaLike, incrementPersonaUsage, checkPersonaMonthlyLimit, incPersonaMonthlyLimit } from '../../db/index.js'
+import { db, sqlite, togglePersonaLike, incrementPersonaUsage, checkPersonaMonthlyLimit, incPersonaMonthlyLimit, decPersonaMonthlyLimit } from '../../db/index.js'
 import { personas } from '../../db/schema/personas.js'
 
 // ═══════════════════════════════════
@@ -153,7 +153,9 @@ export function getPersona(personaId: string) {
 export function deletePersona(personaId: string, userId: string): boolean {
   const p = db.select().from(personas).where(eq(personas.id, personaId)).get()
   if (!p || p.authorId !== userId) return false
+  sqlite.prepare('DELETE FROM persona_likes WHERE persona_id = ?').run(personaId)
   db.delete(personas).where(eq(personas.id, personaId)).run()
+  decPersonaMonthlyLimit(userId)
   return true
 }
 
