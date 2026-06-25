@@ -297,28 +297,21 @@ export function registerWSHandlers(io: Server): void {
       const dcPlayer = r.players.find((p) => p.type === 'human' && p.slotIndex === slotIndex)
       if (!dcPlayer) return
 
-      // 仅在等待阶段启动 AI 接管定时器（游戏中由 leave_game 显式处理）
+      // 等待阶段断线立即转 AI 托管（游戏中由 leave_game 显式处理）
       if (r.status === 'waiting') {
-        setTimeout(() => {
-          const currentRoom = roomManager.getRoom(gameId)
-          if (!currentRoom) return
-          const stillDC = currentRoom.players[slotIndex]
-          if (stillDC && stillDC.type === 'human') {
-            roomManager.updateRoom(gameId, {
-              players: currentRoom.players.map((p, i) =>
-                i === slotIndex ? { ...p, type: 'ai' as const, aiPersona: 'default' as any } : p,
-              ),
-            })
-            roomManager.broadcast(gameId, 'ai_takeover', {
-              userId, slotIndex, nickname: stillDC.customName,
-            })
-            const hasHumans = roomManager.getRoom(gameId)!.players.some((p) => p.type === 'human')
-            if (!hasHumans) {
-              roomManager.broadcast(gameId, 'room_deleted', { reason: '所有玩家已离开' })
-              roomManager.removeRoom(gameId)
-            }
-          }
-        }, 30_000)
+        roomManager.updateRoom(gameId, {
+          players: r.players.map((p, i) =>
+            i === slotIndex ? { ...p, type: 'ai' as const, aiPersona: 'default' as any } : p,
+          ),
+        })
+        roomManager.broadcast(gameId, 'ai_takeover', {
+          userId, slotIndex, nickname: dcPlayer.customName,
+        })
+        const hasHumans = roomManager.getRoom(gameId)!.players.some((p) => p.type === 'human')
+        if (!hasHumans) {
+          roomManager.broadcast(gameId, 'room_deleted', { reason: '所有玩家已离开' })
+          roomManager.removeRoom(gameId)
+        }
       }
     })
   })

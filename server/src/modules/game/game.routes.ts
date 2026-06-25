@@ -123,7 +123,6 @@ export async function gameRoutes(app: any): Promise<void> {
 
     try {
       const result = await generateWordPair(difficulty)
-      // 把生成的词语写入房间
       roomManager.updateRoom(id, {
         civilianWord: result.commonWord,
         undercoverWord: result.undercoverWord,
@@ -131,10 +130,12 @@ export async function gameRoutes(app: any): Promise<void> {
       return success(result, '词语生成成功')
     } catch (err) {
       console.error('[words/generate] Dify 调用失败:', err)
-      return success(
-        { commonWord: '苹果', undercoverWord: '梨子', difficulty },
-        '词语生成成功（离线模式）',
-      )
+      const fallback = { commonWord: '苹果', undercoverWord: '梨子', difficulty }
+      roomManager.updateRoom(id, {
+        civilianWord: fallback.commonWord,
+        undercoverWord: fallback.undercoverWord,
+      })
+      return success(fallback, '词语生成成功（离线模式）')
     }
   })
 
@@ -154,7 +155,7 @@ export async function gameRoutes(app: any): Promise<void> {
     }
 
     if (!room.civilianWord || !room.undercoverWord) {
-      // 玩家未预设词语 → 按难度自动生成
+      // 自动生成词语（/words/generate 端点失败时的最后保障）
       const difficulty = body.difficulty || '适中'
       try {
         const result = await generateWordPair(difficulty)

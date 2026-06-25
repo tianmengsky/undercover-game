@@ -29,10 +29,9 @@ const PERSONA_MAP: Record<string, string> = {
  * 解析人设描述
  * 内置人设直接用 PERSONA_MAP，自定义人设从 personaService 查 systemPrompt
  */
-function resolvePersona(personaId: string): string {
+async function resolvePersona(personaId: string): Promise<string> {
   if (PERSONA_MAP[personaId]) return PERSONA_MAP[personaId]
-  // 可能是 UUID 格式的自定义人设
-  const custom = getPersona(personaId)
+  const custom = await getPersona(personaId)
   return custom?.systemPrompt || PERSONA_MAP.default
 }
 
@@ -274,7 +273,7 @@ export async function* generateSpeech(
   capturedThink?: { text: string },
 ): AsyncGenerator<string> {
   if (capturedThink) capturedThink.text = ''
-  const personaDesc = resolvePersona(personaId)
+  const personaDesc = await resolvePersona(personaId)
   const friendsDesc = alivePlayers
     .filter((p) => p.slotIndex !== slotIndex)
     .map((p) => `玩家${p.name}`)
@@ -385,7 +384,7 @@ export async function generateVote(
   alivePlayers: Array<{ name: string; slotIndex: number }>,
   selfSlotIndex: number,
 ): Promise<{ playerName: string; thinkContent?: string }> {
-  const personaDesc = resolvePersona(personaId)
+  const personaDesc = await resolvePersona(personaId)
 
   // 构造发言 query
   const speechesText = roundSpeeches
