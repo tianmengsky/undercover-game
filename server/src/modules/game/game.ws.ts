@@ -11,6 +11,7 @@ import { Server, Socket } from 'socket.io'
 import { roomManager } from './game.manager.js'
 import { authService } from '../auth/auth.service.js'
 import { getPersona } from '../persona/persona.service.js'
+import { getFallbackSpeech } from './game.ai.js'
 
 export function registerWSHandlers(io: Server): void {
   // 广播完整房间状态
@@ -60,7 +61,6 @@ export function registerWSHandlers(io: Server): void {
 
     // ── 重连恢复：如果是已断线玩家的重连 ──
     if (slotIndex >= 0 && room.players[slotIndex]?.type === 'ai') {
-      // AI 托管的玩家重连：恢复为 human
       const oldPlayer = room.players[slotIndex]
       roomManager.updateRoom(gameId, {
         players: room.players.map((p, i) =>
@@ -102,6 +102,7 @@ export function registerWSHandlers(io: Server): void {
       yourWord: player?.word ?? '',
       yourRole: player?.role ?? '',
       speeches: room.speeches || [],
+      votes: room.votes || [],
     })
 
     // 等待阶段发送 room_state（含房主和完整玩家类型），让 RoomView 初次进入时即可渲染
@@ -265,53 +266,80 @@ export function registerWSHandlers(io: Server): void {
       }
     })
 
-    // 游戏中退出
+    // 游戏中退出（仅改 type + 按槽位降级 resolve）
     socket.on('leave_game', () => {
       const r = roomManager.getRoom(gameId)
       if (!r || r.status === 'waiting') return
       const leaver = r.players.find((p) => p.type === 'human' && p.slotIndex === slotIndex)
       if (!leaver) return
-      // 将退出玩家转为 AI 托管
+
+      // 仅当离开玩家的槽位正好是当前等待的槽位时才 resolve（不影响其他槽位）
+      roomManager.resolveHumanSpeechForSlot(gameId, slotIndex, getFallbackSpeech())
+      const aliveNotSelf = r.players.filter(
+        (p) => p.isAlive && !r.eliminatedPlayers.includes(p.slotIndex) && p.slotIndex !== slotIndex,
+      )
+      const fallbackTarget = aliveNotSelf.length > 0
+        ? aliveNotSelf[Math.floor(Math.random() * aliveNotSelf.length)].slotIndex
+        : 0
+      roomManager.resolveHumanVoteForSlot(gameId, slotIndex, fallbackTarget)
+
+      // 再改 type
       roomManager.updateRoom(gameId, {
         players: r.players.map((p) =>
           p.slotIndex === slotIndex
-            ? { ...p, type: 'ai' as const, aiPersona: 'default' as any }
+            ? { ...p, type: 'ai' as const, aiPersona: 'default' as any, isTakeoverAI: true }
             : p,
         ),
       })
       roomManager.broadcast(gameId, 'ai_takeover', {
         userId, slotIndex, nickname: leaver.customName,
       })
-      // 检查是否所有真人都走了
       const hasHumans = roomManager.getRoom(gameId)!.players.some((p) => p.type === 'human')
-      if (!hasHumans) {
+      if (!hasHumans && r.status !== 'finished') {
         roomManager.broadcast(gameId, 'room_deleted', { reason: '所有玩家已离开' })
         roomManager.removeRoom(gameId)
       }
     })
 
-    // 断线处理
+    // 断线处理：改 type + 游戏阶段立刻降级 resolve
     socket.on('disconnect', () => {
       const r = roomManager.getRoom(gameId)
       if (!r) return
-      const dcPlayer = r.players.find((p) => p.type === 'human' && p.slotIndex === slotIndex)
-      if (!dcPlayer) return
+      const slotPlayer = r.players[slotIndex]
+      if (!slotPlayer || slotPlayer.type !== 'human') return
 
-      // 等待阶段断线立即转 AI 托管（游戏中由 leave_game 显式处理）
-      if (r.status === 'waiting') {
+      // 游戏阶段断线：立刻注入降级行为
+      // gameLoopStartedAt 区分导航过渡（startGame 后 5 秒内断开是 RoomView→GameView，跳过接管）
+      const isNavigationTransition = r.status !== 'waiting'
+        && r.gameLoopStartedAt
+        && (Date.now() - r.gameLoopStartedAt < 5000)
+      if (r.status !== 'waiting' && !isNavigationTransition) {
+        roomManager.resolveHumanSpeechForSlot(gameId, slotIndex, getFallbackSpeech())
+        const aliveNotSelf = r.players.filter(
+          (p) => p.isAlive && !r.eliminatedPlayers.includes(p.slotIndex) && p.slotIndex !== slotIndex,
+        )
+        const fallbackTarget = aliveNotSelf.length > 0
+          ? aliveNotSelf[Math.floor(Math.random() * aliveNotSelf.length)].slotIndex
+          : 0
+        roomManager.resolveHumanVoteForSlot(gameId, slotIndex, fallbackTarget)
+      }
+
+      // 导航过渡期间不接管 type（GameView 马上重连），其他情况改 type 为 AI
+      if (!isNavigationTransition) {
         roomManager.updateRoom(gameId, {
           players: r.players.map((p, i) =>
-            i === slotIndex ? { ...p, type: 'ai' as const, aiPersona: 'default' as any } : p,
+            i === slotIndex ? { ...p, type: 'ai' as const, aiPersona: 'default' as any, isTakeoverAI: true } : p,
           ),
         })
         roomManager.broadcast(gameId, 'ai_takeover', {
-          userId, slotIndex, nickname: dcPlayer.customName,
+          userId, slotIndex, nickname: slotPlayer.customName,
         })
-        const hasHumans = roomManager.getRoom(gameId)!.players.some((p) => p.type === 'human')
-        if (!hasHumans) {
-          roomManager.broadcast(gameId, 'room_deleted', { reason: '所有玩家已离开' })
-          roomManager.removeRoom(gameId)
-        }
+      }
+
+      const hasHumans = roomManager.getRoom(gameId)!.players.some((p) => p.type === 'human')
+      if (!hasHumans && r.status !== 'finished') {
+        roomManager.broadcast(gameId, 'room_deleted', { reason: '所有玩家已离开' })
+        roomManager.removeRoom(gameId)
       }
     })
   })

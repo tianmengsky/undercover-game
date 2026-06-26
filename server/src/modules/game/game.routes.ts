@@ -192,12 +192,30 @@ export async function gameRoutes(app: any): Promise<void> {
     return success({ gameId: id, status: 'role_assign' }, '游戏开始')
   })
 
-  // 获取结算数据
+  // 获取结算数据（房间已删除时回退为仅 replay 数据）
   app.get('/api/games/:id/result', { preHandler: authGuard }, async (req) => {
     const { id } = req.params as { id: string }
     const room = roomManager.getRoom(id)
-    if (!room) {
+    const events = getReplay(id)
+    if (!room && events.length === 0) {
       return error(ErrorCodes.GAME_NOT_FOUND, '游戏不存在')
+    }
+    // 房间已被删除但回放数据还在 → 从 replay events 重建基础结算信息
+    if (!room) {
+      const gameOverEvent = events.find((e) => e.type === 'game_over')
+      const gameStartEvent = events.find((e) => e.type === 'game_start')
+      const eliminationEvents = events.filter((e) => e.type === 'elimination')
+      const speechEvents = events.filter((e) => e.type === 'speech')
+      return success({
+        gameId: id,
+        winner: gameOverEvent?.payload?.winner ?? 'civilian',
+        civilianWord: gameOverEvent?.payload?.civilianWord ?? '',
+        undercoverWord: gameOverEvent?.payload?.undercoverWord ?? '',
+        totalRounds: gameOverEvent?.payload?.totalRounds ?? 0,
+        players: [],
+        eventsCount: events.length,
+        isReplayOnly: true,
+      })
     }
 
     const undercoverEliminated = room.eliminatedPlayers.includes(room.undercoverSlotIndex)
@@ -255,33 +273,35 @@ export async function gameRoutes(app: any): Promise<void> {
   app.get('/api/games/:id/replay', { preHandler: authGuard }, async (req) => {
     const { id } = req.params as { id: string }
     const room = roomManager.getRoom(id)
-
-    // 房间不存在或游戏未结束
-    if (!room) {
-      return error(ErrorCodes.GAME_NOT_FOUND, '游戏不存在')
-    }
-    if (room.status !== 'finished') {
-      return error(ErrorCodes.NOT_FOUND, '游戏还未结束')
-    }
-
     const events = getReplay(id)
-    const undercoverEliminated = room.eliminatedPlayers.includes(room.undercoverSlotIndex)
+
+    // 回放数据为空的两种情况：游戏未结束 / 房间已被清理
+    if (events.length === 0) {
+      if (!room) {
+        return error(ErrorCodes.NOT_FOUND, '回放数据不存在（房间可能已被删除）')
+      }
+      if (room.status !== 'finished') {
+        return error(ErrorCodes.NOT_FOUND, '游戏还未结束')
+      }
+      return error(ErrorCodes.NOT_FOUND, '回放数据为空')
+    }
+    const undercoverEliminated = room?.eliminatedPlayers?.includes(room?.undercoverSlotIndex ?? -1) ?? false
     const winner = undercoverEliminated ? 'civilian' : 'undercover'
 
     return success({
       gameId: id,
       winner,
-      civilianWord: room.civilianWord,
-      undercoverWord: room.undercoverWord,
-      totalRounds: room.currentRound,
-      players: room.players.map((p) => ({
+      civilianWord: room?.civilianWord ?? '',
+      undercoverWord: room?.undercoverWord ?? '',
+      totalRounds: room?.currentRound ?? 0,
+      players: room?.players.map((p) => ({
         slotIndex: p.slotIndex,
         customName: p.customName,
         type: p.type,
         role: p.role,
         isAlive: p.isAlive,
         aiPersona: p.aiPersona,
-      })),
+      })) ?? [],
       events,
     })
   })

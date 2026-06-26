@@ -32,6 +32,7 @@ export interface Player {
   isCurrentSpeaker: boolean
   hasSpokenThisRound: boolean
   hasVotedThisRound: boolean
+  isTakeoverAI?: boolean   // 玩家断线后被 AI 托管，全程用降级行为不调 Dify
 }
 
 export interface Speech {

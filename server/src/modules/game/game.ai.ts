@@ -216,6 +216,12 @@ async function callDifyBlocking(
 // 公开 API
 // ═══════════════════════════════════
 
+/** 取一条随机降级发言 */
+export function getFallbackSpeech(): string {
+  const pool = SPEECH_FALLBACKS.default
+  return pool[Math.floor(Math.random() * pool.length)]
+}
+
 /** 词语类型，每次随机选一个与难度组合，让向量检索命中不同子集 */
 const WORD_CATEGORIES = [
   '食物', '服饰', '家居', '交通', '文具',

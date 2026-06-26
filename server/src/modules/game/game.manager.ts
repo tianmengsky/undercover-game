@@ -23,6 +23,7 @@ export interface GameRoom {
   votes: VoteRecord[]
   humanUserId: string // 已废弃，保留兼容
   achievementExpGained: number
+  gameLoopStartedAt: number  // game loop 启动时间戳，用于区分导航过渡和真正离开
 }
 
 const rooms = new Map<string, GameRoom>()
@@ -34,9 +35,9 @@ export function setIO(io: SocketIOServer): void {
   _io = io
 }
 
-// 人类输入等待 resolver
-const speechResolvers = new Map<string, { resolve: (content: string) => void; timer: ReturnType<typeof setTimeout> }>()
-const voteResolvers = new Map<string, { resolve: (targetSlot: number) => void; timer: ReturnType<typeof setTimeout> }>()
+// 人类输入等待 resolver（按 gameId 键控，同一时刻只有一个槽位在等待）
+const speechResolvers = new Map<string, { resolve: (content: string) => void; timer: ReturnType<typeof setTimeout>; slotIndex: number }>()
+const voteResolvers = new Map<string, { resolve: (targetSlot: number) => void; timer: ReturnType<typeof setTimeout>; slotIndex: number }>()
 
 // 正在运行的 game loop 标记，防止重复启动
 const runningLoops = new Set<string>()
@@ -61,6 +62,7 @@ export const roomManager = {
       votes: [],
       humanUserId: data.humanUserId || '',
       achievementExpGained: 0,
+      gameLoopStartedAt: 0,
     }
     rooms.set(gameId, room)
     return room
@@ -128,17 +130,21 @@ export const roomManager = {
 
   // ═══════════════ 人类输入等待 ═══════════════
   /** 等待人类玩家发言，超时抛错 */
-  waitForHumanSpeech(gameId: string, timeoutMs: number): Promise<string> {
+  waitForHumanSpeech(gameId: string, slotIndex: number, timeoutMs: number): Promise<string> {
     return new Promise((resolve, reject) => {
+      // 清除旧 resolver（避免上一个槽位的残留）
+      const olde = speechResolvers.get(gameId)
+      if (olde) { clearTimeout(olde.timer); speechResolvers.delete(gameId) }
+
       const timer = setTimeout(() => {
         speechResolvers.delete(gameId)
         reject(new Error('SPEECH_TIMEOUT'))
       }, timeoutMs)
-      speechResolvers.set(gameId, { resolve, timer })
+      speechResolvers.set(gameId, { resolve, timer, slotIndex })
     })
   },
 
-  /** WS 收到 player_speech 时调用 */
+  /** WS 收到 player_speech 时调用（不按槽位区分，客户端发来的就是当前等待槽位） */
   resolveHumanSpeech(gameId: string, content: string): void {
     const entry = speechResolvers.get(gameId)
     if (entry) {
@@ -148,14 +154,27 @@ export const roomManager = {
     }
   },
 
+  /** 指定槽位离开时，仅解析该槽位的等待（防止误解析其他槽位） */
+  resolveHumanSpeechForSlot(gameId: string, slotIndex: number, content: string): void {
+    const entry = speechResolvers.get(gameId)
+    if (entry && entry.slotIndex === slotIndex) {
+      clearTimeout(entry.timer)
+      speechResolvers.delete(gameId)
+      entry.resolve(content)
+    }
+  },
+
   /** 等待人类玩家投票，超时抛错 */
-  waitForHumanVote(gameId: string, timeoutMs: number): Promise<number> {
+  waitForHumanVote(gameId: string, slotIndex: number, timeoutMs: number): Promise<number> {
     return new Promise((resolve, reject) => {
+      const olde = voteResolvers.get(gameId)
+      if (olde) { clearTimeout(olde.timer); voteResolvers.delete(gameId) }
+
       const timer = setTimeout(() => {
         voteResolvers.delete(gameId)
         reject(new Error('VOTE_TIMEOUT'))
       }, timeoutMs)
-      voteResolvers.set(gameId, { resolve, timer })
+      voteResolvers.set(gameId, { resolve, timer, slotIndex })
     })
   },
 
@@ -163,6 +182,16 @@ export const roomManager = {
   resolveHumanVote(gameId: string, targetSlot: number): void {
     const entry = voteResolvers.get(gameId)
     if (entry) {
+      clearTimeout(entry.timer)
+      voteResolvers.delete(gameId)
+      entry.resolve(targetSlot)
+    }
+  },
+
+  /** 指定槽位离开时，仅解析该槽位的投票等待 */
+  resolveHumanVoteForSlot(gameId: string, slotIndex: number, targetSlot: number): void {
+    const entry = voteResolvers.get(gameId)
+    if (entry && entry.slotIndex === slotIndex) {
       clearTimeout(entry.timer)
       voteResolvers.delete(gameId)
       entry.resolve(targetSlot)

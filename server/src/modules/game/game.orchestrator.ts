@@ -5,7 +5,7 @@
  * 由 game.routes.ts 的 start 路由触发，异步运行不阻塞 HTTP 响应
  */
 import { roomManager } from './game.manager.js'
-import { generateSpeech, generateVote } from './game.ai.js'
+import { generateSpeech, generateVote, getFallbackSpeech } from './game.ai.js'
 import { recordGame, checkAchievements, registerWordPair, getUserStats } from '../stats/stats.service.js'
 import { startReplay, recordEvent, generateInnerThoughts } from './game.replay.js'
 import { incrementPersonaUsage, getPersona } from '../persona/persona.service.js'
@@ -110,14 +110,19 @@ async function runSpeakingPhase(gameId: string): Promise<void> {
     // 检查是否游戏已被中断
     if (roomManager.getRoom(gameId)?.status === 'finished') return
 
+    // 重读 room 中的实际 type（断线/离开后 WS handler 会改 type，但本循环快照不变）
+    const currentRoom = roomManager.getRoom(gameId)
+    const currentType = currentRoom?.players[player.slotIndex]?.type ?? player.type
+
     broadcast(gameId, 'current_speaker', {
       slotIndex: player.slotIndex,
       playerName: player.customName,
     })
 
-    if (player.type === 'ai') {
+    if (currentType === 'ai') {
       // ── AI 发言（流式） ──
-      console.log(`[orchestrator] ${gameId} 发言阶段: AI ${player.customName}(slot=${player.slotIndex}) 开始发言`)
+      const isTakeover = currentRoom?.players[player.slotIndex]?.isTakeoverAI
+      console.log(`[orchestrator] ${gameId} 发言阶段: AI ${player.customName}(slot=${player.slotIndex}) 开始发言${isTakeover ? '(托管降级)' : ''}`)
       // 仅用本轮发言，避免逐轮累积导致 prompt 过长
       const history = speeches
         .map((s) => `${room.players[s.slotIndex]?.customName ?? '玩家'}：${s.content}`)
@@ -127,26 +132,32 @@ async function runSpeakingPhase(gameId: string): Promise<void> {
 
       let fullContent = ''
       const capturedThink = { text: '' }
-      try {
-        const stream = generateSpeech(
-          player.aiPersona || 'default',
-          player.word || room.civilianWord,
-          player.slotIndex,
-          history || '还没有人发言',
-          room.currentRound,
-          alivePlayers.map((p) => ({ slotIndex: p.slotIndex, name: p.customName })),
-          capturedThink,
-        )
 
-        for await (const chunk of stream) {
-          fullContent += chunk
-          broadcast(gameId, 'ai_speech_chunk', {
-            slotIndex: player.slotIndex,
-            chunk,
-          })
+      if (isTakeover) {
+        // 托管 AI 不调 Dify，用模板池
+        fullContent = getFallbackSpeech()
+      } else {
+        try {
+          const stream = generateSpeech(
+            player.aiPersona || 'default',
+            player.word || room.civilianWord,
+            player.slotIndex,
+            history || '还没有人发言',
+            room.currentRound,
+            alivePlayers.map((p) => ({ slotIndex: p.slotIndex, name: p.customName })),
+            capturedThink,
+          )
+
+          for await (const chunk of stream) {
+            fullContent += chunk
+            broadcast(gameId, 'ai_speech_chunk', {
+              slotIndex: player.slotIndex,
+              chunk,
+            })
+          }
+        } catch (err) {
+          console.error(`[orchestrator] AI ${player.slotIndex} 发言失败:`, err)
         }
-      } catch (err) {
-        console.error(`[orchestrator] AI ${player.slotIndex} 发言失败:`, err)
       }
 
       if (!fullContent.trim()) {
@@ -161,6 +172,10 @@ async function runSpeakingPhase(gameId: string): Promise<void> {
         isAI: true,
         timestamp: Date.now(),
       })
+      // 即时写回 room：拼接之前轮次的全量 + 本轮已收集的 speeches
+      const latestRoom = roomManager.getRoom(gameId)!
+      const prevRounds = (latestRoom.speeches || []).filter((s) => s.round < room.currentRound)
+      roomManager.updateRoom(gameId, { speeches: [...prevRounds, ...speeches] })
 
       const personaId = player.aiPersona
       let voice = LEGACY_VOICE[personaId]
@@ -200,13 +215,13 @@ async function runSpeakingPhase(gameId: string): Promise<void> {
       console.log(`[orchestrator] ${gameId} 发言阶段: 等待人类 ${player.customName}(slot=${player.slotIndex}) 发言...`)
       broadcast(gameId, 'request_speech', {
         slotIndex: player.slotIndex,
-        deadline: Date.now() + SPEECH_TIMEOUT_SEC * 1000,
-        timeoutSec: SPEECH_TIMEOUT_SEC,
+        deadline: Date.now() + SPEECH_TIMEOUT_SEC * 1000,        timeoutSec: SPEECH_TIMEOUT_SEC,
       })
 
       try {
         const content = await roomManager.waitForHumanSpeech(
           gameId,
+          player.slotIndex,
           SPEECH_TIMEOUT_SEC * 1000,
         )
 
@@ -217,6 +232,10 @@ async function runSpeakingPhase(gameId: string): Promise<void> {
           isAI: false,
           timestamp: Date.now(),
         })
+        // 即时写回 room
+        const latestRoom = roomManager.getRoom(gameId)!
+        const prevRounds = (latestRoom.speeches || []).filter((s) => s.round < room.currentRound)
+        roomManager.updateRoom(gameId, { speeches: [...prevRounds, ...speeches] })
 
         broadcast(gameId, 'player_speech_broadcast', {
           slotIndex: player.slotIndex,
@@ -243,9 +262,8 @@ async function runSpeakingPhase(gameId: string): Promise<void> {
     }
   }
 
-  // 保存发言记录
+  // 保存发言记录（内联已写，此处只写 players）
   roomManager.updateRoom(gameId, {
-    speeches: [...(room.speeches || []), ...speeches],
     players: room.players.map((p) => {
       const spokeThisRound = speeches.some((s) => s.slotIndex === p.slotIndex)
       return { ...p, hasSpokenThisRound: spokeThisRound }
@@ -269,16 +287,21 @@ async function runVotingPhase(gameId: string): Promise<void> {
   for (const player of alivePlayers) {
     if (roomManager.getRoom(gameId)?.status === 'finished') return
 
+    // 重读 room 中的实际 type（和发言阶段同理）
+    const currentRoom = roomManager.getRoom(gameId)
+    const currentType = currentRoom?.players[player.slotIndex]?.type ?? player.type
+
     broadcast(gameId, 'current_voter', {
       slotIndex: player.slotIndex,
       playerName: player.customName,
     })
 
-    if (player.type === 'ai') {
+    if (currentType === 'ai') {
       // ── AI 投票 ──
+      const isTakeover = currentRoom?.players[player.slotIndex]?.isTakeoverAI
       const aliveSlotSet = new Set(alivePlayers.map((p) => p.slotIndex))
       const roundSpeeches = (room.speeches || [])
-        .filter((s) => s.round === room.currentRound && aliveSlotSet.has(s.slotIndex)) // 仅本轮 + 过滤已淘汰玩家
+        .filter((s) => s.round === room.currentRound && aliveSlotSet.has(s.slotIndex))
         .map((s) => ({
           playerName: (s.slotIndex === player.slotIndex
             ? `${room.players[s.slotIndex]?.customName ?? '玩家'}(这是你自己的发言)`
@@ -286,29 +309,40 @@ async function runVotingPhase(gameId: string): Promise<void> {
           content: s.content,
         }))
 
-      const voteResult = await generateVote(
-        player.aiPersona || 'default',
-        player.word || room.civilianWord,
-        roundSpeeches,
-        alivePlayers.map((p) => ({ name: p.customName, slotIndex: p.slotIndex })),
-        player.slotIndex,
-      )
+      let targetSlot: number
+      let thinkContent: string | undefined
 
-      const targetName = voteResult.playerName
+      if (isTakeover) {
+        // 托管 AI 不调 Dify，随机投非己目标
+        const candidates = alivePlayers.filter((p) => p.slotIndex !== player.slotIndex)
+        targetSlot = candidates.length > 0
+          ? candidates[Math.floor(Math.random() * candidates.length)].slotIndex
+          : alivePlayers.find((p) => p.slotIndex !== player.slotIndex)!.slotIndex
+        thinkContent = undefined
+      } else {
+        const voteResult = await generateVote(
+          player.aiPersona || 'default',
+          player.word || room.civilianWord,
+          roundSpeeches,
+          alivePlayers.map((p) => ({ name: p.customName, slotIndex: p.slotIndex })),
+          player.slotIndex,
+        )
 
-      // 按昵称匹配目标
-      const target = alivePlayers.find(
-        (p) => p.customName === targetName,
-      )
-      const targetSlot = target
-        ? target.slotIndex
-        : alivePlayers.find((p) => p.slotIndex !== player.slotIndex)!.slotIndex
+        const targetName = voteResult.playerName
+        thinkContent = voteResult.thinkContent
+        const target = alivePlayers.find((p) => p.customName === targetName)
+        targetSlot = target
+          ? target.slotIndex
+          : alivePlayers.find((p) => p.slotIndex !== player.slotIndex)!.slotIndex
+      }
 
       votes.push({
         voterSlot: player.slotIndex,
         targetSlot,
         timestamp: Date.now(),
       })
+      // 即时写回 room（每轮 votes 只增不删，直接用局部数组覆盖）
+      roomManager.updateRoom(gameId, { votes: [...votes] })
 
       broadcast(gameId, 'vote_cast', {
         voterSlot: player.slotIndex,
@@ -325,7 +359,7 @@ async function runVotingPhase(gameId: string): Promise<void> {
           targetSlot,
           targetName: room.players[targetSlot]?.customName,
           isAI: true,
-          thinkContent: voteResult.thinkContent || undefined,
+          thinkContent: thinkContent || undefined,
         },
       })
 
@@ -345,6 +379,7 @@ async function runVotingPhase(gameId: string): Promise<void> {
       try {
         const targetSlot = await roomManager.waitForHumanVote(
           gameId,
+          player.slotIndex,
           VOTE_TIMEOUT_SEC * 1000,
         )
 
@@ -353,6 +388,8 @@ async function runVotingPhase(gameId: string): Promise<void> {
           targetSlot,
           timestamp: Date.now(),
         })
+        // 即时写回 room
+        roomManager.updateRoom(gameId, { votes: [...votes] })
 
         broadcast(gameId, 'vote_cast', {
           voterSlot: player.slotIndex,
@@ -382,6 +419,8 @@ async function runVotingPhase(gameId: string): Promise<void> {
             targetSlot: randomTarget.slotIndex,
             timestamp: Date.now(),
           })
+          // 即时写回 room
+          roomManager.updateRoom(gameId, { votes: [...votes] })
 
           broadcast(gameId, 'vote_timeout', {
             slotIndex: player.slotIndex,
@@ -395,7 +434,6 @@ async function runVotingPhase(gameId: string): Promise<void> {
 
   // 保存投票记录
   roomManager.updateRoom(gameId, {
-    votes: [...(room.votes || []), ...votes],
     players: room.players.map((p) => {
       const votedThisRound = votes.some((v) => v.voterSlot === p.slotIndex)
       return { ...p, hasVotedThisRound: votedThisRound }
@@ -453,85 +491,87 @@ async function runEliminationPhase(gameId: string): Promise<string | null> {
     console.log(`[orchestrator] ${gameId} === ${winner === 'civilian' ? '平民' : '卧底'}胜利! 词语: ${room.civilianWord}/${room.undercoverWord}, 共${room.currentRound}轮 ===`)
     roomManager.updateRoom(gameId, { status: 'finished' })
 
-    // 记录战绩（仅人类玩家）
+    // 记录战绩 & 检测成就（所有人类玩家，不限于房主）
     let achievementList: any[] = []
-    if (room.humanUserId) {
-      const humanPlayer = room.players.find((p) => p.type === 'human')
-      if (humanPlayer) {
-        const won = humanPlayer.role === winner
-        const totalVotes = room.votes.filter((v) => v.voterSlot === humanPlayer.slotIndex).length
-        const correctVotes = room.votes.filter(
-          (v) => v.voterSlot === humanPlayer.slotIndex && v.targetSlot === room.undercoverSlotIndex,
-        ).length
 
-        // 记录词语对（用于 word_master 成就）
-        await registerWordPair(room.humanUserId, `${room.civilianWord}/${room.undercoverWord}`)
+    // 计算 MVP：投票命中卧底次数最多的存活玩家（全局只算一次）
+    let mvpSlot = -1
+    let mvpScore = -1
+    for (const v of room.votes) {
+      if (v.targetSlot === room.undercoverSlotIndex) {
+        const c = room.votes.filter((x) => x.voterSlot === v.voterSlot && x.targetSlot === room.undercoverSlotIndex).length
+        if (c > mvpScore) { mvpScore = c; mvpSlot = v.voterSlot }
+      }
+    }
 
-        // 计算 MVP：投票命中卧底次数最多的存活玩家
-        let mvpSlot = -1
-        let mvpScore = -1
+    const humanPlayers = room.players.filter((p) => p.type === 'human')
+    let totalAchievementExp = 0
 
-        for (const v of room.votes) {
-          if (v.targetSlot === room.undercoverSlotIndex) {
-            const c = room.votes.filter((x) => x.voterSlot === v.voterSlot && x.targetSlot === room.undercoverSlotIndex).length
-            if (c > mvpScore) { mvpScore = c; mvpSlot = v.voterSlot }
-          }
-        }
-        const isMvp = mvpSlot === humanPlayer.slotIndex
+    for (const hp of humanPlayers) {
+      const hid = hp.userId
+      if (!hid) continue  // 没有 userId 的槽位（极端情况）跳过
 
-        await recordGame({
-          userId: room.humanUserId,
-          nickname: humanPlayer.customName,
+      const won = hp.role === winner
+      const totalVotes = room.votes.filter((v) => v.voterSlot === hp.slotIndex).length
+      const correctVotes = room.votes.filter(
+        (v) => v.voterSlot === hp.slotIndex && v.targetSlot === room.undercoverSlotIndex,
+      ).length
+      const isMvp = mvpSlot === hp.slotIndex
+
+      await registerWordPair(hid, `${room.civilianWord}/${room.undercoverWord}`)
+
+      await recordGame({
+        userId: hid,
+        nickname: hp.customName,
+        won,
+        role: hp.role as 'civilian' | 'undercover',
+        survivedRounds: hp.isAlive ? room.currentRound : room.currentRound - 1,
+        isMvp,
+        correctVotes,
+        wordPair: `${room.civilianWord}/${room.undercoverWord}`,
+        totalRounds: room.currentRound,
+      })
+
+      const eliminatedUndercoverRound = room.eliminatedPlayers.includes(room.undercoverSlotIndex)
+        ? room.currentRound : -1
+      const userStats = await getUserStats(hid)!
+      const newAchievements = await checkAchievements(hid, {
+        gameResult: {
           won,
-          role: humanPlayer.role as 'civilian' | 'undercover',
-          survivedRounds: humanPlayer.isAlive ? room.currentRound : room.currentRound - 1,
+          role: hp.role as 'civilian' | 'undercover',
+          survivedRounds: hp.isAlive ? room.currentRound : room.currentRound - 1,
           isMvp,
           correctVotes,
-          wordPair: `${room.civilianWord}/${room.undercoverWord}`,
-          totalRounds: room.currentRound,
-        })
+          totalVotes,
+          eliminatedUndercoverRound,
+        },
+        userStats,
+      })
 
-        // 检测成就
-        const eliminatedUndercoverRound = room.eliminatedPlayers.includes(room.undercoverSlotIndex)
-          ? room.currentRound : -1
-        const userStats = await getUserStats(room.humanUserId)!
-        const newAchievements = await checkAchievements(room.humanUserId, {
-          gameResult: {
-            won,
-            role: humanPlayer.role as 'civilian' | 'undercover',
-            survivedRounds: humanPlayer.isAlive ? room.currentRound : room.currentRound - 1,
-            isMvp,
-            correctVotes,
-            totalVotes,
-            eliminatedUndercoverRound,
-          },
-          userStats,
-        })
+      if (newAchievements.length > 0) {
+        // 为每个成就附上 userId，前端据此过滤只显示自己的成就
+        achievementList.push(...newAchievements.map((a) => ({ ...a, userId: hid })))
+      }
+      for (const ach of newAchievements) {
+        totalAchievementExp += (ach as any).rewardExp || 0
+      }
+    }
 
-        achievementList = newAchievements
+    roomManager.updateRoom(gameId, { achievementExpGained: totalAchievementExp })
 
-        // 累计成就经验到 room，供 result API 读取
-        let totalAchievementExp = 0
-        for (const ach of newAchievements) {
-          totalAchievementExp += (ach as any).rewardExp || 0
-        }
-        roomManager.updateRoom(gameId, { achievementExpGained: totalAchievementExp })
+    if (achievementList.length > 0) {
+      broadcast(gameId, 'achievement_unlocked', { achievements: achievementList })
+    }
 
-        if (newAchievements.length > 0) {
-          broadcast(gameId, 'achievement_unlocked', { achievements: newAchievements })
-        }
-
-        // 累加 AI 人设使用次数 + 检测 persona_star
-        for (const p of room.players) {
-          if (p.type === 'ai' && p.aiPersona && p.aiPersona !== 'default') {
-            await incrementPersonaUsage(p.aiPersona)
-            const persona = await getPersona(p.aiPersona)
-            if (persona && persona.authorId !== '_official_' && persona.usageCount >= 10) {
-              const starAch = await checkPersonaStar(persona.authorId)
-              if (starAch) {
-                broadcast(gameId, 'achievement_unlocked', { achievements: [starAch] })
-              }
-            }
+    // 累加 AI 人设使用次数 + 检测 persona_star
+    for (const p of room.players) {
+      if (p.type === 'ai' && p.aiPersona && p.aiPersona !== 'default') {
+        await incrementPersonaUsage(p.aiPersona)
+        const persona = await getPersona(p.aiPersona)
+        if (persona && persona.authorId !== '_official_' && persona.usageCount >= 10) {
+          const starAch = await checkPersonaStar(persona.authorId)
+          if (starAch) {
+            broadcast(gameId, 'achievement_unlocked', { achievements: [starAch] })
           }
         }
       }
@@ -596,6 +636,10 @@ export async function runGameLoop(gameId: string): Promise<void> {
   }
 
   roomManager.markLoopRunning(gameId)
+  // 记录启动时间戳，用于 disconnect 区分导航过渡和真正离开
+  if (room) {
+    roomManager.updateRoom(gameId, { gameLoopStartedAt: Date.now() } as any)
+  }
   console.log(`[orchestrator] 游戏开始: ${gameId}, 共 ${room.players.length} 名玩家, 卧底位: ${room.undercoverSlotIndex}`)
 
   // 开始回放录制
@@ -661,10 +705,15 @@ export async function runGameLoop(gameId: string): Promise<void> {
       const winner = await runEliminationPhase(gameId)
       if (winner) break
 
-      // 4. 准备下一轮（保留 speeches 供 AI 参考全盘历史，仅清空投票）
+      // 4. 准备下一轮（重置 round flags，保留 speeches 供 AI 参考全盘历史，仅清空投票）
       roomManager.updateRoom(gameId, {
         votes: [],
         status: 'speaking',
+        players: room.players.map((p) => ({
+          ...p,
+          hasSpokenThisRound: false,
+          hasVotedThisRound: false,
+        })),
       })
 
       broadcast(gameId, 'next_round', {

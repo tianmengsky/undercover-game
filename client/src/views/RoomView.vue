@@ -249,6 +249,14 @@ function initEmptySlots() {
 }
 
 function buildSlotsFromPlayers(players: any[], hostUserId: string) {
+  // 补全陌生 AI 人设到 personaOptions（房主选的自定义人设可能不在访客的本地列表里）
+  for (const p of players) {
+    const pid = p.persona || p.aiPersona
+    if (pid && !personaOptions.value.some((opt) => opt.id === pid)) {
+      personaOptions.value.push({ id: pid, name: p.customName || '', emoji: '🧩' })
+    }
+  }
+
   slots.value = Array.from({ length: 6 }, (_, i) => {
     const p = players[i]
     if (p && p.type !== 'empty') {
@@ -286,8 +294,16 @@ const startStep = ref('')  // '' | 'generating' | 'assigning'
 async function handleStart() {
   starting.value = true
   try {
-    startStep.value = 'generating'
-    await generateWords(roomId, difficulty.value)
+    if (wordMode.value === 'ai') {
+      startStep.value = 'generating'
+      await generateWords(roomId, difficulty.value)
+    } else if (wordMode.value === 'custom') {
+      // 自定义词汇：先通过 WS 写入房间
+      send('set_words', {
+        civilianWord: civilianWord.value.trim(),
+        undercoverWord: undercoverWord.value.trim(),
+      })
+    }
     startStep.value = 'assigning'
     const res: any = await startGame(roomId, { difficulty: difficulty.value })
     if (res.code === 0) router.push(`/game/${roomId}`)
@@ -364,6 +380,13 @@ onMounted(async () => {
       }
     }
   } catch { /* ignore */ }
+
+  // 刷新 AI 槽位昵称（room_state 先到达时 personaOptions 还没加载完，昵称和 emoji 可能是空的）
+  for (const slot of slots.value) {
+    if (slot.type === 'ai' && slot.persona) {
+      slot.nickname = getPersonaName(slot.persona) || slot.nickname
+    }
+  }
 
   // 持久化人设名映射（供 game store 使用）
   try {

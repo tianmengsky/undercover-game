@@ -66,7 +66,7 @@
       <!-- ===== MVP ===== -->
       <div class="mvp-highlight" v-if="mvpPlayer">
         🏆 本局 MVP：{{ playerName(mvpPlayer) }}
-        <span v-if="mvpPlayer.type === 'human'">（你）</span>
+        <span v-if="mvpPlayer.type === 'human'"></span>
       </div>
 
       <!-- ===== 经验值区域 ===== -->
@@ -215,7 +215,11 @@ onMounted(async () => {
 })
 
 const mvpPlayer = computed(() => data.value?.players?.find((p: any) => p.isMvp) || null)
-const achList = computed(() => gameStore.newAchievements || [])
+const achList = computed(() => {
+  const all = gameStore.newAchievements || []
+  const myId = authStore.user?.id
+  return all.filter((a: any) => !a.userId || a.userId === myId)
+})
 
 function goToLobby() {
   router.push('/rooms')

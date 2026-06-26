@@ -1,6 +1,6 @@
 <!--
   PlayerList.vue - 玩家列表组件
-  功能：头像+名称+状态标签排列，发言中高亮，已淘汰灰化
+  功能：头像+名称+状态标签排列，发言/投票中高亮，已淘汰灰化
 -->
 <template>
   <div class="player-list">
@@ -10,6 +10,7 @@
       class="player-item"
       :class="{
         'is-speaking': isSpeaking && player.slotIndex === currentSpeakerIndex,
+        'is-voting': isVoting && player.slotIndex === currentVoterIndex,
         'is-eliminated': !player.isAlive,
       }">
       <div class="player-avatar">
@@ -23,8 +24,9 @@
       <div class="player-status">
         <span v-if="!player.isAlive" class="status-eliminated">已淘汰</span>
         <span v-else-if="isSpeaking && player.slotIndex === currentSpeakerIndex" class="status-speaking">发言中</span>
-        <span v-else-if="player.hasSpokenThisRound" class="status-spoken">已发言</span>
+        <span v-else-if="isVoting && player.slotIndex === currentVoterIndex" class="status-voting">投票中</span>
         <span v-else-if="player.hasVotedThisRound" class="status-voted">已投票</span>
+        <span v-else-if="player.hasSpokenThisRound" class="status-spoken">已发言</span>
       </div>
     </div>
   </div>
@@ -37,6 +39,7 @@ import AIPersonaTag from './AIPersonaTag.vue'
 const props = defineProps<{
   players: Player[]
   currentSpeakerIndex: number
+  currentVoterIndex: number
   isSpeaking: boolean
   isVoting: boolean
   votedPlayers: Set<number>
@@ -70,6 +73,12 @@ const props = defineProps<{
   animation: speak-pulse 1.5s ease-in-out infinite;
 }
 
+.player-item.is-voting {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+  animation: vote-pulse 1.2s ease-in-out infinite;
+}
+
 .player-item.is-eliminated {
   opacity: 0.45;
   pointer-events: none;
@@ -78,6 +87,11 @@ const props = defineProps<{
 @keyframes speak-pulse {
   0%, 100% { box-shadow: 0 0 8px rgba(79, 172, 254, 0.25); }
   50% { box-shadow: 0 0 20px rgba(79, 172, 254, 0.5); }
+}
+
+@keyframes vote-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(245, 158, 11, 0.25); }
+  50% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.5); }
 }
 
 .player-avatar {
@@ -141,6 +155,18 @@ const props = defineProps<{
 .status-spoken {
   font-size: var(--font-size-sm);
   color: var(--color-success);
+}
+
+.status-voting {
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+  font-weight: 600;
+  animation: blink 0.8s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .status-voted {

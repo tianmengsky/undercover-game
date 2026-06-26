@@ -99,6 +99,11 @@ export const useGameStore = defineStore('game', () => {
       persona?: string
       timestamp: number
     }>
+    votes?: Array<{
+      voterSlot: number
+      targetSlot: number
+      timestamp: number
+    }>
   }) {
     gameId.value = state.gameId
     if (state.status) status.value = state.status as GameStatus
@@ -107,26 +112,41 @@ export const useGameStore = defineStore('game', () => {
     if (state.currentSpeakerIndex !== undefined) currentSpeakerIndex.value = state.currentSpeakerIndex
     if (state.yourWord !== undefined) yourWord.value = state.yourWord
     if (state.yourRole !== undefined) yourRole.value = state.yourRole
+    // 重连时只用本轮数据（服务端 speeches 全量, votes 仅本轮）
     if (state.speeches) {
-      speeches.value = state.speeches.map((s) => ({
-        slotIndex: s.slotIndex,
-        content: s.content,
-        round: s.round,
-        persona: s.persona as AIPersona | undefined,
-        isAI: s.isAI,
-        timestamp: s.timestamp,
+      const round = state.currentRound ?? currentRound.value
+      speeches.value = state.speeches
+        .filter((s) => s.round === round)
+        .map((s) => ({
+          slotIndex: s.slotIndex,
+          content: s.content,
+          round: s.round,
+          persona: s.persona as AIPersona | undefined,
+          isAI: s.isAI,
+          timestamp: s.timestamp,
+        }))
+    }
+    if (state.votes) {
+      votes.value = state.votes.map((v) => ({
+        voterSlot: v.voterSlot,
+        targetSlot: v.targetSlot,
+        timestamp: v.timestamp,
       }))
     }
     if (state.players) {
+      // 从 speeches/votes 反推本轮 flag（重连后状态正确）
+      const spokenSet = new Set((state.speeches || []).filter((s) => s.round === (state.currentRound ?? currentRound.value)).map((s) => s.slotIndex))
+      const votedSet = new Set((state.votes || []).map((v) => v.voterSlot))
       players.value = state.players.map((p) => ({
         slotIndex: p.slotIndex,
         customName: p.customName || (p.isAI || p.type === 'ai' ? resolvePersonaName(p.aiPersona) || `AI-${p.slotIndex + 1}` : `玩家${p.slotIndex + 1}`),
         type: (p.type ? (p.type === 'ai' ? 'ai' : p.type === 'empty' ? 'empty' : 'human') : p.isAI ? 'ai' : 'human') as Player['type'],
-        isAlive: p.isAlive ?? true,
+        // 已淘汰的玩家不要被 game_state 快照复活
+        isAlive: eliminatedPlayers.value.includes(p.slotIndex) ? false : (p.isAlive ?? true),
         aiPersona: (p.aiPersona || 'default') as AIPersona,
         isCurrentSpeaker: false,
-        hasSpokenThisRound: false,
-        hasVotedThisRound: false,
+        hasSpokenThisRound: spokenSet.has(p.slotIndex),
+        hasVotedThisRound: votedSet.has(p.slotIndex),
       }))
     }
   }

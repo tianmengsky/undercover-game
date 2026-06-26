@@ -60,8 +60,9 @@
         <PlayerList
           :players="leftPlayers"
           :current-speaker-index="gameStore.currentSpeakerIndex"
+          :current-voter-index="gameStore.currentVoterIndex"
           :is-speaking="gameStore.status === 'speaking'"
-          :is-voting="false"
+          :is-voting="gameStore.status === 'voting'"
           :voted-players="votedTargetSet"
         />
       </aside>
@@ -110,8 +111,9 @@
         <PlayerList
           :players="rightPlayers"
           :current-speaker-index="gameStore.currentSpeakerIndex"
+          :current-voter-index="gameStore.currentVoterIndex"
           :is-speaking="gameStore.status === 'speaking'"
-          :is-voting="false"
+          :is-voting="gameStore.status === 'voting'"
           :voted-players="votedTargetSet"
         />
       </aside>
@@ -168,6 +170,7 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import { useTTS } from '@/composables/useTTS'
 import { useTimer } from '@/composables/useTimer'
 import { startGame, getGameResult } from '@/services/gameService'
+import { useAuthStore } from '@/stores/auth'
 import GameHeader from '@/components/game/GameHeader.vue'
 import PlayerList from '@/components/game/PlayerList.vue'
 import SpeechArea from '@/components/game/SpeechArea.vue'
@@ -179,6 +182,7 @@ import type { Speech } from '@/types/game'
 const route = useRoute()
 const router = useRouter()
 const gameStore = useGameStore()
+const authStore = useAuthStore()
 const { isConnected, connect, send, disconnect, on } = useWebSocket()
 const { remaining, isUrgent, isExpired, progress, start: startTimer, stop: stopTimer } = useTimer()
 
@@ -379,10 +383,12 @@ function setupWSListeners() {
     stopTimer()
   })
 
-  // 成就解锁通知
+  // 成就解锁通知（只显示自己的成就）
   on('achievement_unlocked', (p: unknown) => {
-    const payload = p as { achievements: Array<{ name: string; icon: string }> }
-    showAchievementUnlock(payload.achievements)
+    const payload = p as { achievements: Array<{ name: string; icon: string; userId: string }> }
+    const myId = authStore.user?.id
+    const mine = payload.achievements.filter((a) => !a.userId || a.userId === myId)
+    if (mine.length > 0) showAchievementUnlock(mine)
   })
 
   // 阶段过渡倒计时
