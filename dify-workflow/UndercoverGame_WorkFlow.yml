@@ -1,0 +1,519 @@
+app:
+  description: AI谁是卧底大乱斗工作流
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  icon_type: emoji
+  mode: advanced-chat
+  name: UndercoverGame_WorkFlow
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/deepseek:0.0.17@f7a5c1d222d17ee419b17a80d6e4923838fe93788dc724a3af73fbc6990b3a32
+    version: null
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/tongyi:0.1.48@966d88dc40611f067311c1c9839139ebc4b55bff471bc5e736dc3e828bc67b46
+    version: null
+kind: app
+version: 0.6.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        attachment_image_file_size_limit: 2
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        file_upload_limit: 20
+        image_file_batch_limit: 10
+        image_file_size_limit: 10
+        single_chunk_attachment_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInLoop: false
+        sourceType: knowledge-retrieval
+        targetType: llm
+      id: 1780808341296-source-1780808372414-target
+      selected: false
+      source: '1780808341296'
+      sourceHandle: source
+      target: '1780808372414'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: llm
+        targetType: answer
+      id: 1780808372414-source-1780808733566-target
+      selected: false
+      source: '1780808372414'
+      sourceHandle: source
+      target: '1780808733566'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: start
+        targetType: if-else
+      id: 1780808041934-source-1780812149765-target
+      selected: false
+      source: '1780808041934'
+      sourceHandle: source
+      target: '1780812149765'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: if-else
+        targetType: knowledge-retrieval
+      id: 1780812149765-true-1780808341296-target
+      source: '1780812149765'
+      sourceHandle: 'true'
+      target: '1780808341296'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: if-else
+        targetType: llm
+      id: 1780812149765-76e3aff6-5904-45d3-ab17-751ab29890a1-1780812410921-target
+      source: '1780812149765'
+      sourceHandle: 76e3aff6-5904-45d3-ab17-751ab29890a1
+      target: '1780812410921'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: if-else
+        targetType: llm
+      id: 1780812149765-e03835bd-faf9-44d7-8881-d51ee313fcc7-1780812548781-target
+      source: '1780812149765'
+      sourceHandle: e03835bd-faf9-44d7-8881-d51ee313fcc7
+      target: '1780812548781'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: llm
+        targetType: answer
+      id: 1780812410921-source-1780808733566-target
+      source: '1780812410921'
+      sourceHandle: source
+      target: '1780808733566'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: llm
+        targetType: answer
+      id: 1780812548781-source-1780808733566-target
+      source: '1780812548781'
+      sourceHandle: source
+      target: '1780808733566'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        selected: false
+        title: 用户输入
+        type: start
+        variables:
+        - default: ''
+          hint: ''
+          label: type
+          options: []
+          placeholder: ''
+          required: true
+          type: text-input
+          variable: type
+        - default: ''
+          hint: ''
+          label: currentWord
+          options: []
+          placeholder: ''
+          required: false
+          type: text-input
+          variable: currentWord
+        - default: ''
+          hint: ''
+          label: friends
+          options: []
+          placeholder: ''
+          required: false
+          type: text-input
+          variable: friends
+        - default: ''
+          hint: ''
+          label: personality
+          options: []
+          placeholder: ''
+          required: false
+          type: text-input
+          variable: personality
+        - default: ''
+          hint: ''
+          label: difficulty
+          options: []
+          placeholder: ''
+          required: false
+          type: text-input
+          variable: difficulty
+      height: 211
+      id: '1780808041934'
+      position:
+        x: -92.71745887492574
+        y: 179.00000000000009
+      positionAbsolute:
+        x: -92.71745887492574
+        y: 179.00000000000009
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        dataset_ids:
+        - nou5O8QCwkGxyyc6v70bRW+T/m0WitL0wiBuSppDPrmh3BAVTZMmWSqVjGKmhV0w
+        - UVkP91HP5gpuEzeZ2nDecPgtGI6pzHQ7l9I3JdRRUpnXcxOeXDxHU5e7LGpBEQOB
+        desc: 知识库检索
+        multiple_retrieval_config:
+          reranking_enable: true
+          reranking_mode: reranking_model
+          reranking_model:
+            model: qwen3-rerank
+            provider: langgenius/tongyi/tongyi
+          score_threshold: 0
+          top_k: 10
+          weights:
+            keyword_setting:
+              keyword_weight: 0.6
+            vector_setting:
+              embedding_model_name: Doubao-embedding-vision
+              embedding_provider_name: langgenius/volcengine_maas/volcengine_maas
+              vector_weight: 0.4
+            weight_type: customized
+        query_attachment_selector: []
+        query_variable_selector:
+        - sys
+        - query
+        retrieval_mode: multiple
+        selected: false
+        title: 知识检索
+        type: knowledge-retrieval
+      height: 116
+      id: '1780808341296'
+      position:
+        x: 509.25645220491106
+        y: 89.54423809467605
+      positionAbsolute:
+        x: 509.25645220491106
+        y: 89.54423809467605
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        context:
+          enabled: true
+          variable_selector:
+          - '1780808341296'
+          - result
+        desc: word-generator
+        model:
+          completion_params:
+            response_format: json_object
+            temperature: 0.7
+          mode: chat
+          name: deepseek-v4-flash
+          provider: langgenius/deepseek/deepseek
+        prompt_template:
+        - id: e9649a6c-d1a7-4ffd-9817-650dfe0bcb51
+          role: system
+          text: '角色：你是《谁是卧底》游戏助手
+
+
+            任务：
+
+
+            1.  只使用「知识检索」节点返回的10对词语数据{{#context#}}，**绝对不能编造任何不在数据里
+
+
+            的词**。
+
+
+            2.  从这10对词语中，**随机选择1对**作为本次游戏的题目，不要总是选固定位置的。
+
+
+            输出：输出格式必须严格按照下面的JSON格式，**只返回JSON，不要加任何多余的解释、说明、符
+
+
+            号、Markdown格式**：
+
+
+            {
+
+
+            "common_word": "这里填选中的普通词",
+
+
+            "undercover_word": "这里填选中的卧底词",
+
+
+            "difficulty": "这里填这对词语的难度"
+
+
+            }
+
+
+            限制：绝对不能编造任何不在数据里的词'
+        selected: true
+        structured_output:
+          schema:
+            additionalProperties: false
+            properties:
+              common_word:
+                description: 游戏的普通词
+                type: string
+              difficulty:
+                description: 词语对的难度
+                type: string
+              undercover_word:
+                description: 游戏的卧底词
+                type: string
+            required:
+            - common_word
+            - undercover_word
+            - difficulty
+            type: object
+        structured_output_enabled: true
+        title: 词语选择LLM
+        type: llm
+        vision:
+          enabled: false
+      height: 114
+      id: '1780808372414'
+      position:
+        x: 820.5971606782437
+        y: 89.54423809467605
+      positionAbsolute:
+        x: 820.5971606782437
+        y: 89.54423809467605
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        answer: '{{#1780808372414.text#}}{{#1780812410921.text#}}{{#1780812548781.text#}}'
+        selected: false
+        title: 直接回复
+        type: answer
+        variables: []
+      height: 138
+      id: '1780808733566'
+      position:
+        x: 1144.1252497150356
+        y: 234.36555375410256
+      positionAbsolute:
+        x: 1144.1252497150356
+        y: 234.36555375410256
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        cases:
+        - case_id: 'true'
+          conditions:
+          - comparison_operator: contains
+            id: 31a403c9-d4ab-4929-91a8-297a87e354d0
+            value: 词语生成
+            varType: string
+            variable_selector:
+            - '1780808041934'
+            - type
+          id: 'true'
+          logical_operator: and
+        - case_id: 76e3aff6-5904-45d3-ab17-751ab29890a1
+          conditions:
+          - comparison_operator: contains
+            id: 6f3fab30-4d8a-4fa5-bf01-9c7c7ec89c67
+            value: 语义描述
+            varType: string
+            variable_selector:
+            - '1780808041934'
+            - type
+          id: 76e3aff6-5904-45d3-ab17-751ab29890a1
+          logical_operator: and
+        - case_id: e03835bd-faf9-44d7-8881-d51ee313fcc7
+          conditions:
+          - comparison_operator: contains
+            id: 638c8035-50c3-406b-9bc8-8b17169a3946
+            value: 投票
+            varType: string
+            variable_selector:
+            - '1780808041934'
+            - type
+          id: e03835bd-faf9-44d7-8881-d51ee313fcc7
+          logical_operator: and
+        selected: false
+        title: 条件分支
+        type: if-else
+      height: 266
+      id: '1780812149765'
+      position:
+        x: 204.8482572751637
+        y: 200.00000000000009
+      positionAbsolute:
+        x: 204.8482572751637
+        y: 200.00000000000009
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 语义描述LLM
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: deepseek-v4-flash
+          provider: langgenius/deepseek/deepseek
+        prompt_template:
+        - id: be3398f5-15b6-41dd-8d8c-5e27a6eb5903
+          role: system
+          text: "你正在参加一局\"谁是卧底\"游戏。你需要根据你的人设性格、你拿到的词语、以及当前的游戏局势，发表一句符合你身份的发言。\n\n\
+            ## 你的身份\n- 人设性格：{{#1780808041934.personality#}}\n- 你拿到的词语：{{#1780808041934.currentWord#}}\n\
+            - 你和其他玩家的关系：{{#1780808041934.friends#}}\n\n## 游戏规则\n- 每轮所有存活玩家轮流发言，每人只能说一句话来描述自己拿到的词语\n\
+            - 你需要靠其他人的语言来推断自己是**平民**还是**卧底** \n- 如果你是**平民**：如实描述词语，让其他平民认出你是同伴，同时试探谁是卧底\n\
+            - 如果你是**卧底**：你不知道平民的词是什么，要根据前面人的发言**猜**平民在说什么，然后伪装成平民，避免暴露\n\n## 发言要求\n\
+            1. 只能说**一句话**，15-50 字，不要太长\n2. 贴合你的人设性格（如果人设是\"逻辑大师\"，就用理性分析的语气；如果是\"\
+            萌新小白\"，就说得很模糊天真）\n3. 不要直接说出你拿到的词语，或在话里直接提到这个词语（那是犯规）\n4. 可以参考前面人的发言内容，但不要完全重复\n\
+            5. 上一轮已经用过的描述不要再使用，确保每一次描述都不一样\n6. 如果你是卧底：根据前面人的发言推理平民的词，用模糊的描述蒙混过关\n\n\
+            ## 其他玩家的发言（按顺序）\n{{#sys.query#}}\n\n\n## 输出格式\n直接输出你的发言文字，不要带引号、不要带角色标注，就是一句自然的话。"
+        retry_config:
+          max_retries: 3
+          retry_enabled: false
+          retry_interval: 1000
+        selected: false
+        structured_output_enabled: false
+        title: 语义描述LLM
+        type: llm
+        vision:
+          enabled: false
+      height: 114
+      id: '1780812410921'
+      position:
+        x: 820.5971606782437
+        y: 234.36555375410256
+      positionAbsolute:
+        x: 820.5971606782437
+        y: 234.36555375410256
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 投票LLM
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: deepseek-v4-flash
+          provider: langgenius/deepseek/deepseek
+        prompt_template:
+        - id: 297631ef-cc34-4512-a58a-6b6089059fcd
+          role: system
+          text: "你是《谁是卧底》游戏中的玩家，现在进入投票环节，请根据以下信息投出一票：\n\n## 你的身份\n- 你本轮分配到的词语：{{#1780808041934.currentWord#}}\n\
+            - 你的性格：{{#1780808041934.personality#}}\n- 你和其他玩家的关系：{{#1780808041934.friends#}}\n\
+            \n## 本轮所有玩家的发言（按发言顺序）\n{{#sys.query#}}\n\n## 投票规则（请严格遵守）\n1. 你是个普通玩家，会根据自己的直觉和怀疑投票，而不是完美法官。\n\
+            2. 优先怀疑发言和你描述差异最大的玩家。\n3. 如果大家描述都差不多，你可以：\n   - 随机选一个\n   - 或者跟票，先投出去一个\n\
+            4. 你有30%的概率会投错票，不要总是投最明显的卧底。\n5. 结合你和其他玩家的关系来决定：是朋友就少怀疑，是对手就多怀疑。\n\n##\
+            \ 输出要求\n只输出你要投的玩家昵称，不要加任何解释、符号、多余内容。\n\n"
+        retry_config:
+          max_retries: 3
+          retry_enabled: false
+          retry_interval: 1000
+        selected: false
+        title: 投票LLM
+        type: llm
+        vision:
+          enabled: false
+      height: 114
+      id: '1780812548781'
+      position:
+        x: 820.5971606782437
+        y: 390.6837898369786
+      positionAbsolute:
+        x: 820.5971606782437
+        y: 390.6837898369786
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    viewport:
+      x: 104.80066144677005
+      y: 222.4589994974633
+      zoom: 0.5063412145678795
+  rag_pipeline_variables: []
