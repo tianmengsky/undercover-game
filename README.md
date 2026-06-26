@@ -8,7 +8,7 @@
 
 ## 核心特性
 
-- **多人实时联机** — Socket.IO 房间系统，创建 / 加入 / 踢人 / 房主转移 / 断线重连
+- **多人实时联机** — Socket.IO 房间系统，创建 / 加入 / 踢人 / 房主转移 / 断线立即AI接管
 - **Dify AI 智能体** — 8 种官方人设（名侦探柯南、路飞、鸣人、熊大熊二、喜羊羊灰太狼...），风格各异
 - **AI 人设工坊** — 创建自定义 AI 人设，关键词自动匹配生成 system prompt + 声音参数
 - **流式发言 + TTS** — AI 发言实时流式输出（打字机动画），Web Speech API 语音播报
@@ -50,16 +50,16 @@
 | 配置校验 | Zod | ^3.24 | 环境变量校验 + 请求体校验 |
 | 日志 | pino + pino-pretty | ^9.7 | 结构化日志（dev 模式彩色输出） |
 
-### 数据库（SQLite + Drizzle ORM）
+### 数据库（MySQL + Drizzle ORM）
 
 | 分类 | 技术 | 版本 | 用途 |
 |------|------|------|------|
-| 数据库 | SQLite | — | 零配置嵌入式数据库 |
-| SQL 驱动 | better-sqlite3 | ^12.10 | Node.js 原生 C++ SQLite 绑定 |
+| 数据库 | MySQL | 8.0 | 关系型数据库 |
+| SQL 驱动 | mysql2 | ^3.22 | Node.js MySQL 连接池驱动 |
 | ORM | Drizzle ORM | ^0.42 | 类型安全的 SQL 查询构造 |
 | ORM 工具 | drizzle-kit + drizzle-zod | latest | Schema 迁移 + Zod 类型生成 |
 
-8 张表：`users` / `game_records` / `game_players` / `game_rounds` / `game_speeches` / `word_cache` / `achievements` / `personas`
+11 张表：`users` / `game_records` / `game_players` / `game_rounds` / `game_speeches` / `word_cache` / `achievements` / `user_achievements` / `personas` / `persona_likes` / `persona_monthly_limits`
 
 ### 认证安全
 
@@ -106,8 +106,9 @@
 ### 环境要求
 
 - Node.js >= 20.19.0
-- Docker Desktop（运行 Dify）
-- Dify 本地实例 + 已配置的「谁是卧底 AI」工作流
+- MySQL 8.0（本地运行或远程实例）
+- Docker Desktop（运行 Dify，可选）
+- Dify 本地实例 + 已配置的「谁是卧底 AI」工作流（可选）
 
 ### 安装与运行
 
@@ -127,16 +128,21 @@ npm install
 # 4. 配置环境变量
 cd ../server
 cp .env.example .env
-# 编辑 .env，填入 JWT_SECRET、JWT_REFRESH_SECRET、DIFY_API_KEY
+# 编辑 .env，填入 JWT_SECRET、JWT_REFRESH_SECRET、MySQL 连接信息、DIFY_API_KEY（可选）
 
-# 5. 启动 Dify（Docker Desktop 需已启动）
+# 5. 初始化数据库
+npm run db:migrate
+# （可选）导入种子数据：
+# mysql -u root -p undercover_game < src/db/seed.sql
+
+# 6. 启动 Dify（Docker Desktop 需已启动，可选）
 # Dify 默认运行在 http://localhost
 
-# 6. 启动服务端（端口 3456）
+# 7. 启动服务端（端口 3456）
 cd server
 npm run dev
 
-# 7. 新开终端，启动客户端（端口 4173）
+# 8. 新开终端，启动客户端（端口 4173）
 cd client
 npm run dev
 ```
@@ -147,6 +153,11 @@ npm run dev
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
+| `DB_HOST` | 是 | MySQL 主机地址，默认 `127.0.0.1` |
+| `DB_PORT` | 是 | MySQL 端口，默认 `3306` |
+| `DB_USER` | 是 | MySQL 用户名 |
+| `DB_PASSWORD` | 是 | MySQL 密码 |
+| `DB_NAME` | 是 | MySQL 数据库名 |
 | `JWT_SECRET` | 是 | accessToken 签名密钥（≥16 字符随机字符串） |
 | `JWT_REFRESH_SECRET` | 是 | refreshToken 签名密钥（与 JWT_SECRET 不同） |
 | `DIFY_API_KEY` | 否 | Dify 应用 API Key，不填则用内置回退 |
@@ -177,7 +188,7 @@ npm run dev
 │       │   ├── game/           # 游戏核心（orchestrator / WebSocket / 回放 / 房间管理）
 │       │   ├── persona/        # AI 人设工坊（关键词匹配 + system prompt 生成）
 │       │   └── stats/          # 排行榜 / 成就 / 经验值
-│       ├── db/                 # SQLite + Drizzle ORM（连接 / schema / seed）
+│       ├── db/                 # MySQL + Drizzle ORM（连接 / schema / seed / 迁移）
 │       ├── config/             # 环境配置（Zod 校验）
 │       └── shared/             # 公共工具（错误码 / 响应封装）
 └── dify-workflow/              # Dify 工作流导出文件（.yml）
